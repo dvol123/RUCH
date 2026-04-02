@@ -142,7 +142,11 @@ class MainActivity : AppCompatActivity() {
             handleMicClick(Language.RUSSIAN)
         }
         binding.russianEditBtn.setOnClickListener {
-            showEditDialog(Language.RUSSIAN)
+            // Translate current text in Russian field
+            val text = binding.russianText.text.toString().trim()
+            if (text.isNotEmpty()) {
+                viewModel.translateText(Language.RUSSIAN, text)
+            }
         }
         binding.russianSpeakerBtn.setOnClickListener {
             viewModel.speakText(Language.RUSSIAN, binding.russianText.text.toString())
@@ -153,7 +157,11 @@ class MainActivity : AppCompatActivity() {
             handleMicClick(Language.CHINESE)
         }
         binding.chineseEditBtn.setOnClickListener {
-            showEditDialog(Language.CHINESE)
+            // Translate current text in Chinese field
+            val text = binding.chineseText.text.toString().trim()
+            if (text.isNotEmpty()) {
+                viewModel.translateText(Language.CHINESE, text)
+            }
         }
         binding.chineseSpeakerBtn.setOnClickListener {
             viewModel.speakText(Language.CHINESE, binding.chineseText.text.toString())
