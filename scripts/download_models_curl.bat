@@ -88,7 +88,7 @@ if exist "%TTS_DIR%\ru\model.onnx" (
     curl -L -o "%TEMP%\vits-ru.tar.bz2" ^
         --retry 5 --retry-delay 10 ^
         --connect-timeout 60 --max-time 1200 ^
-        "https://github.com/k2-fsa/sherpa-onnx/releases/download/tts-models/vits-ru-ru_auto-medium.tar.bz2"
+        "https://github.com/k2-fsa/sherpa-onnx/releases/download/tts-models/vits-mms-rus.tar.bz2"
     
     if exist "%TEMP%\vits-ru.tar.bz2" (
         echo Extracting...
@@ -120,7 +120,7 @@ if exist "%TTS_DIR%\zh\model.onnx" (
     curl -L -o "%TEMP%\vits-zh.tar.bz2" ^
         --retry 5 --retry-delay 10 ^
         --connect-timeout 60 --max-time 1200 ^
-        "https://github.com/k2-fsa/sherpa-onnx/releases/download/tts-models/vits-zh-hf-thera.tar.bz2"
+        "https://github.com/k2-fsa/sherpa-onnx/releases/download/tts-models/vits-zh-aishell3.tar.bz2"
     
     if exist "%TEMP%\vits-zh.tar.bz2" (
         echo Extracting...

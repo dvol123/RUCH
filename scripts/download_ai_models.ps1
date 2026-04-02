@@ -236,10 +236,9 @@ if (-not (Test-Path "$NLLB_DIR\vocab.json")) {
 Write-Host ""
 Write-Host "[3/3] Downloading TTS models for Text-to-Speech..."
 
-# Russian TTS - use smaller model
+# Russian TTS - vits-mms-rus (MMS model from Meta)
 $RU_TTS_URLS = @(
-    "https://github.com/k2-fsa/sherpa-onnx/releases/download/tts-models/vits-ru-ru_auto-medium.tar.bz2",
-    "https://huggingface.co/csukuangfj/vits-ru-ru_auto-medium/resolve/main/vits-ru-ru_auto-medium.tar.bz2"
+    "https://github.com/k2-fsa/sherpa-onnx/releases/download/tts-models/vits-mms-rus.tar.bz2"
 )
 $RU_TTS_TEMP = "$env:TEMP\vits-ru.tar.bz2"
 
@@ -287,10 +286,9 @@ if (-not (Test-Path "$TTS_DIR\ru\model.onnx")) {
     Write-Host "OK - Russian TTS model already exists"
 }
 
-# Chinese TTS
+# Chinese TTS - vits-zh-aishell3 (AISHELL-3 dataset)
 $ZH_TTS_URLS = @(
-    "https://github.com/k2-fsa/sherpa-onnx/releases/download/tts-models/vits-zh-hf-thera.tar.bz2",
-    "https://huggingface.co/csukuangfj/vits-zh-hf-thera/resolve/main/vits-zh-hf-thera.tar.bz2"
+    "https://github.com/k2-fsa/sherpa-onnx/releases/download/tts-models/vits-zh-aishell3.tar.bz2"
 )
 $ZH_TTS_TEMP = "$env:TEMP\vits-zh.tar.bz2"
 
