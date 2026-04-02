@@ -31,6 +31,8 @@
     <string name="error_tts">Ошибка синтеза речи</string>
     <string name="error_no_text">Нет текста для обработки</string>
     <string name="permission_required">Требуется разрешение на запись аудио</string>
+    <string name="permission_microphone_required">Для записи голоса требуется разрешение на использование микрофона</string>
+    <string name="transcribing">Распознавание...</string>
     
     <!-- Model -->
     <string name="model_download_title">Загрузка моделей</string>

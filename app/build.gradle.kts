@@ -49,6 +49,21 @@ android {
         resources {
             excludes += "/META-INF/{AL2.0,LGPL2.1}"
         }
+        jniLibs {
+            useLegacyPackaging = true
+        }
+    }
+
+    // Не сжимать модели и ONNX файлы
+    androidResources {
+        noCompress += listOf("bin", "onnx", "json", "txt")
+    }
+
+    // Настройка JNI библиотек
+    sourceSets {
+        getByName("main") {
+            jniLibs.srcDirs("src/main/jniLibs")
+        }
     }
 }
 

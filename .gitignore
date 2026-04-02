@@ -95,3 +95,15 @@ Thumbs.db
 # Local environment
 .env
 .env.local
+
+# AI Models (too large for GitHub)
+app/src/main/assets/models/
+
+# Native libraries (downloaded separately)
+app/src/main/jniLibs/
+
+# Temporary files
+*.tmp
+*.temp
+tmp/
+temp/
