@@ -8,6 +8,9 @@
     <string name="btn_microphone">Микрофон</string>
     <string name="btn_keyboard">Клавиатура</string>
     <string name="btn_speaker">Динамик</string>
+    <string name="btn_edit_translate">Редактировать и перевести</string>
+    <string name="btn_translate">Перевести</string>
+    <string name="btn_cancel">Отмена</string>
     
     <!-- Menu -->
     <string name="menu_theme">Тема оформления</string>

@@ -5,6 +5,8 @@ import android.content.pm.PackageManager
 import android.os.Bundle
 import android.view.View
 import android.view.inputmethod.InputMethodManager
+import android.widget.EditText
+import android.widget.ImageButton
 import android.widget.Toast
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.activity.viewModels
@@ -15,6 +17,7 @@ import androidx.core.view.ViewCompat
 import androidx.core.view.WindowCompat
 import androidx.core.view.WindowInsetsCompat
 import com.google.android.material.dialog.MaterialAlertDialogBuilder
+import com.google.android.material.textfield.TextInputEditText
 import com.ruch.translator.BuildConfig
 import com.ruch.translator.data.Language
 import com.ruch.translator.data.ProcessingState
@@ -138,8 +141,8 @@ class MainActivity : AppCompatActivity() {
         binding.russianMicBtn.setOnClickListener {
             handleMicClick(Language.RUSSIAN)
         }
-        binding.russianKeyboardBtn.setOnClickListener {
-            showKeyboard(binding.russianText)
+        binding.russianEditBtn.setOnClickListener {
+            showEditDialog(Language.RUSSIAN)
         }
         binding.russianSpeakerBtn.setOnClickListener {
             viewModel.speakText(Language.RUSSIAN, binding.russianText.text.toString())
@@ -149,12 +152,101 @@ class MainActivity : AppCompatActivity() {
         binding.chineseMicBtn.setOnClickListener {
             handleMicClick(Language.CHINESE)
         }
-        binding.chineseKeyboardBtn.setOnClickListener {
-            showKeyboard(binding.chineseText)
+        binding.chineseEditBtn.setOnClickListener {
+            showEditDialog(Language.CHINESE)
         }
         binding.chineseSpeakerBtn.setOnClickListener {
             viewModel.speakText(Language.CHINESE, binding.chineseText.text.toString())
         }
+    }
+    
+    /**
+     * Show edit dialog with translate button
+     */
+    private fun showEditDialog(language: Language) {
+        val currentText = if (language == Language.RUSSIAN) {
+            binding.russianText.text.toString()
+        } else {
+            binding.chineseText.text.toString()
+        }
+        
+        // Create edit text
+        val editText = TextInputEditText(this).apply {
+            setText(currentText)
+            hint = if (language == Language.RUSSIAN) {
+                getString(R.string.enter_text_russian)
+            } else {
+                getString(R.string.enter_text_chinese)
+            }
+            setSingleLine(false)
+            maxLines = 8
+            minLines = 3
+            setPadding(32, 24, 32, 24)
+            textSize = 18f
+        }
+        
+        val container = android.widget.FrameLayout(this).apply {
+            addView(editText, android.widget.FrameLayout.LayoutParams(
+                android.widget.FrameLayout.LayoutParams.MATCH_PARENT,
+                android.widget.FrameLayout.LayoutParams.WRAP_CONTENT
+            ))
+            setPadding(24, 16, 24, 0)
+        }
+        
+        val title = if (language == Language.RUSSIAN) {
+            getString(R.string.russian)
+        } else {
+            getString(R.string.chinese)
+        }
+        
+        MaterialAlertDialogBuilder(this)
+            .setTitle(title)
+            .setView(container)
+            .setPositiveButton(R.string.btn_translate) { dialog, _ ->
+                val newText = editText.text.toString().trim()
+                if (newText.isNotEmpty()) {
+                    // Update the text field
+                    if (language == Language.RUSSIAN) {
+                        binding.russianText.setText(newText)
+                    } else {
+                        binding.chineseText.setText(newText)
+                    }
+                    // Trigger translation
+                    viewModel.translateText(language, newText)
+                }
+                dialog.dismiss()
+                hideKeyboard()
+            }
+            .setNegativeButton(R.string.btn_cancel) { dialog, _ ->
+                dialog.dismiss()
+                hideKeyboard()
+            }
+            .setNeutralButton(android.R.string.ok) { dialog, _ ->
+                // Just save without translating
+                val newText = editText.text.toString().trim()
+                if (newText.isNotEmpty()) {
+                    if (language == Language.RUSSIAN) {
+                        binding.russianText.setText(newText)
+                        viewModel.setRussianText(newText)
+                    } else {
+                        binding.chineseText.setText(newText)
+                        viewModel.setChineseText(newText)
+                    }
+                }
+                dialog.dismiss()
+                hideKeyboard()
+            }
+            .create()
+            .apply {
+                setOnShowListener {
+                    editText.requestFocus()
+                    val imm = getSystemService(INPUT_METHOD_SERVICE) as InputMethodManager
+                    imm.showSoftInput(editText, InputMethodManager.SHOW_IMPLICIT)
+                    // Select all text
+                    editText.selectAll()
+                }
+            }
+            .show()
     }
     
     private fun handleMicClick(language: Language) {
@@ -200,12 +292,14 @@ class MainActivity : AppCompatActivity() {
         binding.chineseMicBtn.backgroundTintList = 
             if (language == Language.CHINESE) android.content.res.ColorStateList.valueOf(recordingColor)
             else android.content.res.ColorStateList.valueOf(inactiveColor)
-    }
-    
-    private fun showKeyboard(editText: android.widget.EditText) {
-        editText.requestFocus()
-        val imm = getSystemService(INPUT_METHOD_SERVICE) as InputMethodManager
-        imm.showSoftInput(editText, InputMethodManager.SHOW_IMPLICIT)
+        
+        // Update status text
+        if (language != null) {
+            binding.statusText.text = getString(R.string.recording)
+            binding.statusText.visibility = View.VISIBLE
+        } else {
+            binding.statusText.visibility = View.GONE
+        }
     }
     
     private fun hideKeyboard() {
@@ -216,25 +310,7 @@ class MainActivity : AppCompatActivity() {
     }
     
     private fun setupTextWatchers() {
-        binding.russianText.setOnFocusChangeListener { _, hasFocus ->
-            if (!hasFocus) {
-                hideKeyboard()
-                val text = binding.russianText.text.toString()
-                if (text.isNotEmpty() && text != viewModel.russianText.value) {
-                    viewModel.translateText(Language.RUSSIAN, text)
-                }
-            }
-        }
-        
-        binding.chineseText.setOnFocusChangeListener { _, hasFocus ->
-            if (!hasFocus) {
-                hideKeyboard()
-                val text = binding.chineseText.text.toString()
-                if (text.isNotEmpty() && text != viewModel.chineseText.value) {
-                    viewModel.translateText(Language.CHINESE, text)
-                }
-            }
-        }
+        // No longer auto-translate on focus change - use edit button instead
     }
     
     private fun observeViewModel() {
@@ -251,9 +327,29 @@ class MainActivity : AppCompatActivity() {
         }
         
         viewModel.processingState.observe(this) { state ->
-            binding.progressBar.visibility = when (state) {
-                ProcessingState.RECORDING, ProcessingState.TRANSCRIBING, ProcessingState.TRANSLATING -> View.VISIBLE
-                else -> View.GONE
+            when (state) {
+                ProcessingState.RECORDING -> {
+                    binding.progressBar.visibility = View.VISIBLE
+                    binding.statusText.text = getString(R.string.recording)
+                    binding.statusText.visibility = View.VISIBLE
+                }
+                ProcessingState.TRANSCRIBING -> {
+                    binding.statusText.text = getString(R.string.transcribing)
+                    binding.statusText.visibility = View.VISIBLE
+                }
+                ProcessingState.TRANSLATING -> {
+                    binding.progressBar.visibility = View.VISIBLE
+                    binding.statusText.text = getString(R.string.translating)
+                    binding.statusText.visibility = View.VISIBLE
+                }
+                ProcessingState.SPEAKING -> {
+                    binding.statusText.text = getString(R.string.speaking)
+                    binding.statusText.visibility = View.VISIBLE
+                }
+                ProcessingState.IDLE -> {
+                    binding.progressBar.visibility = View.GONE
+                    binding.statusText.visibility = View.GONE
+                }
             }
         }
         
@@ -314,6 +410,7 @@ class MainActivity : AppCompatActivity() {
             .show()
     }
     
+    @Deprecated("Deprecated in Java")
     override fun onBackPressed() {
         if (isRecording) {
             viewModel.stopRecording()
@@ -321,6 +418,7 @@ class MainActivity : AppCompatActivity() {
             currentRecordingLanguage = null
             updateRecordingUI(null)
         } else {
+            @Suppress("DEPRECATION")
             super.onBackPressed()
         }
     }

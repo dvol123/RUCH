@@ -6,6 +6,7 @@
     android:id="@+id/root_layout"
     android:layout_width="match_parent"
     android:layout_height="match_parent"
+    android:background="?android:attr/colorBackground"
     android:fitsSystemWindows="true"
     tools:context=".ui.MainActivity">
 
@@ -29,29 +30,28 @@
         android:layout_width="match_parent"
         android:layout_height="match_parent"
         android:fillViewport="true"
-        android:fitsSystemWindows="true"
         app:layout_behavior="@string/appbar_scrolling_view_behavior">
 
         <LinearLayout
             android:layout_width="match_parent"
-            android:layout_height="match_parent"
+            android:layout_height="wrap_content"
             android:orientation="vertical"
-            android:paddingBottom="24dp">
+            android:padding="8dp">
 
             <!-- Russian Language Section -->
             <com.google.android.material.card.MaterialCardView
                 android:id="@+id/russian_card"
                 android:layout_width="match_parent"
-                android:layout_height="0dp"
-                android:layout_weight="1"
-                android:layout_margin="8dp"
+                android:layout_height="wrap_content"
+                android:layout_marginBottom="8dp"
                 app:cardBackgroundColor="@color/russian_field_bg"
                 app:cardCornerRadius="16dp"
-                app:cardElevation="4dp">
+                app:cardElevation="4dp"
+                app:strokeWidth="0dp">
 
                 <LinearLayout
                     android:layout_width="match_parent"
-                    android:layout_height="match_parent"
+                    android:layout_height="wrap_content"
                     android:orientation="vertical"
                     android:padding="12dp">
 
@@ -62,30 +62,25 @@
                         android:text="@string/russian"
                         android:textAllCaps="true"
                         android:textStyle="bold"
-                        android:textColor="@color/primary_dark"
+                        android:textColor="@color/primary"
+                        android:textSize="14sp"
                         android:layout_marginBottom="8dp" />
 
-                    <ScrollView
+                    <EditText
+                        android:id="@+id/russian_text"
                         android:layout_width="match_parent"
-                        android:layout_height="0dp"
-                        android:layout_weight="1"
-                        android:fillViewport="true">
-
-                        <EditText
-                            android:id="@+id/russian_text"
-                            android:layout_width="match_parent"
-                            android:layout_height="wrap_content"
-                            android:minHeight="80dp"
-                            android:background="@android:color/transparent"
-                            android:gravity="top|start"
-                            android:hint="@string/enter_text_russian"
-                            android:inputType="textMultiLine"
-                            android:textSize="18sp"
-                            android:lineSpacingMultiplier="1.3"
-                            android:imeOptions="actionDone"
-                            android:importantForAutofill="no" />
-
-                    </ScrollView>
+                        android:layout_height="wrap_content"
+                        android:minHeight="100dp"
+                        android:background="@android:color/transparent"
+                        android:gravity="top|start"
+                        android:hint="@string/enter_text_russian"
+                        android:inputType="textMultiLine"
+                        android:textSize="18sp"
+                        android:textColor="?android:attr/textColorPrimary"
+                        android:textColorHint="?android:attr/textColorSecondary"
+                        android:lineSpacingMultiplier="1.3"
+                        android:imeOptions="actionDone"
+                        android:importantForAutofill="no" />
 
                     <!-- Control Buttons for Russian -->
                     <LinearLayout
@@ -97,31 +92,34 @@
 
                         <ImageButton
                             android:id="@+id/russian_mic_btn"
-                            android:layout_width="56dp"
-                            android:layout_height="56dp"
+                            android:layout_width="52dp"
+                            android:layout_height="52dp"
                             android:src="@drawable/ic_mic"
                             android:contentDescription="@string/btn_microphone"
                             android:backgroundTint="@color/button_inactive"
+                            app:tint="@android:color/white"
                             style="@style/Widget.MaterialComponents.Button" />
 
                         <ImageButton
-                            android:id="@+id/russian_keyboard_btn"
-                            android:layout_width="56dp"
-                            android:layout_height="56dp"
-                            android:layout_marginStart="16dp"
+                            android:id="@+id/russian_edit_btn"
+                            android:layout_width="52dp"
+                            android:layout_height="52dp"
+                            android:layout_marginStart="12dp"
                             android:src="@drawable/ic_edit"
-                            android:contentDescription="@string/btn_keyboard"
+                            android:contentDescription="@string/btn_edit_translate"
                             android:backgroundTint="@color/button_inactive"
+                            app:tint="@android:color/white"
                             style="@style/Widget.MaterialComponents.Button" />
 
                         <ImageButton
                             android:id="@+id/russian_speaker_btn"
-                            android:layout_width="56dp"
-                            android:layout_height="56dp"
-                            android:layout_marginStart="16dp"
+                            android:layout_width="52dp"
+                            android:layout_height="52dp"
+                            android:layout_marginStart="12dp"
                             android:src="@drawable/ic_speaker"
                             android:contentDescription="@string/btn_speaker"
                             android:backgroundTint="@color/button_inactive"
+                            app:tint="@android:color/white"
                             style="@style/Widget.MaterialComponents.Button" />
 
                     </LinearLayout>
@@ -143,16 +141,16 @@
             <com.google.android.material.card.MaterialCardView
                 android:id="@+id/chinese_card"
                 android:layout_width="match_parent"
-                android:layout_height="0dp"
-                android:layout_weight="1"
-                android:layout_margin="8dp"
+                android:layout_height="wrap_content"
+                android:layout_marginTop="8dp"
                 app:cardBackgroundColor="@color/chinese_field_bg"
                 app:cardCornerRadius="16dp"
-                app:cardElevation="4dp">
+                app:cardElevation="4dp"
+                app:strokeWidth="0dp">
 
                 <LinearLayout
                     android:layout_width="match_parent"
-                    android:layout_height="match_parent"
+                    android:layout_height="wrap_content"
                     android:orientation="vertical"
                     android:padding="12dp">
 
@@ -164,29 +162,24 @@
                         android:textAllCaps="true"
                         android:textStyle="bold"
                         android:textColor="@color/accent"
+                        android:textSize="14sp"
                         android:layout_marginBottom="8dp" />
 
-                    <ScrollView
+                    <EditText
+                        android:id="@+id/chinese_text"
                         android:layout_width="match_parent"
-                        android:layout_height="0dp"
-                        android:layout_weight="1"
-                        android:fillViewport="true">
-
-                        <EditText
-                            android:id="@+id/chinese_text"
-                            android:layout_width="match_parent"
-                            android:layout_height="wrap_content"
-                            android:minHeight="80dp"
-                            android:background="@android:color/transparent"
-                            android:gravity="top|start"
-                            android:hint="@string/enter_text_chinese"
-                            android:inputType="textMultiLine"
-                            android:textSize="18sp"
-                            android:lineSpacingMultiplier="1.3"
-                            android:imeOptions="actionDone"
-                            android:importantForAutofill="no" />
-
-                    </ScrollView>
+                        android:layout_height="wrap_content"
+                        android:minHeight="100dp"
+                        android:background="@android:color/transparent"
+                        android:gravity="top|start"
+                        android:hint="@string/enter_text_chinese"
+                        android:inputType="textMultiLine"
+                        android:textSize="18sp"
+                        android:textColor="?android:attr/textColorPrimary"
+                        android:textColorHint="?android:attr/textColorSecondary"
+                        android:lineSpacingMultiplier="1.3"
+                        android:imeOptions="actionDone"
+                        android:importantForAutofill="no" />
 
                     <!-- Control Buttons for Chinese -->
                     <LinearLayout
@@ -198,31 +191,34 @@
 
                         <ImageButton
                             android:id="@+id/chinese_mic_btn"
-                            android:layout_width="56dp"
-                            android:layout_height="56dp"
+                            android:layout_width="52dp"
+                            android:layout_height="52dp"
                             android:src="@drawable/ic_mic"
                             android:contentDescription="@string/btn_microphone"
                             android:backgroundTint="@color/button_inactive"
+                            app:tint="@android:color/white"
                             style="@style/Widget.MaterialComponents.Button" />
 
                         <ImageButton
-                            android:id="@+id/chinese_keyboard_btn"
-                            android:layout_width="56dp"
-                            android:layout_height="56dp"
-                            android:layout_marginStart="16dp"
+                            android:id="@+id/chinese_edit_btn"
+                            android:layout_width="52dp"
+                            android:layout_height="52dp"
+                            android:layout_marginStart="12dp"
                             android:src="@drawable/ic_edit"
-                            android:contentDescription="@string/btn_keyboard"
+                            android:contentDescription="@string/btn_edit_translate"
                             android:backgroundTint="@color/button_inactive"
+                            app:tint="@android:color/white"
                             style="@style/Widget.MaterialComponents.Button" />
 
                         <ImageButton
                             android:id="@+id/chinese_speaker_btn"
-                            android:layout_width="56dp"
-                            android:layout_height="56dp"
-                            android:layout_marginStart="16dp"
+                            android:layout_width="52dp"
+                            android:layout_height="52dp"
+                            android:layout_marginStart="12dp"
                             android:src="@drawable/ic_speaker"
                             android:contentDescription="@string/btn_speaker"
                             android:backgroundTint="@color/button_inactive"
+                            app:tint="@android:color/white"
                             style="@style/Widget.MaterialComponents.Button" />
 
                     </LinearLayout>
@@ -230,6 +226,17 @@
                 </LinearLayout>
 
             </com.google.android.material.card.MaterialCardView>
+
+            <!-- Status Info -->
+            <TextView
+                android:id="@+id/status_text"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:layout_marginTop="16dp"
+                android:gravity="center"
+                android:textColor="?android:attr/textColorSecondary"
+                android:textSize="12sp"
+                android:visibility="gone" />
 
         </LinearLayout>
 
