@@ -268,11 +268,9 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
             val sampleRate = ttsEngine.getSampleRate(Language.RUSSIAN) // Get actual sample rate
             
             // Convert FloatArray [-1, 1] to ShortArray [Short.MIN_VALUE, Short.MAX_VALUE]
-            val shortData = ShortArray(audioData.size) {
-                for (i in audioData.indices) {
-                    val clamped = audioData[i].coerceIn(-1f, 1f)
-                    shortData[i] = (clamped * Short.MAX_VALUE).toInt().toShort()
-                }
+            val shortData = ShortArray(audioData.size) { i ->
+                val clamped = audioData[i].coerceIn(-1f, 1f)
+                (clamped * Short.MAX_VALUE).toInt().toShort()
             }
             
             val bufferSize = AudioTrack.getMinBufferSize(
