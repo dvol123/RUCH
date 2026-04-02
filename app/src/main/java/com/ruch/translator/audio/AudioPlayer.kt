@@ -22,9 +22,22 @@ class AudioPlayer {
     private val isStopped = AtomicBoolean(false)
 
     /**
-     * Воспроизведение аудиоданных
-     * @param audioData PCM аудиоданные (16-bit mono)
-     * @param sampleRate Частота дискретизации (по умолчанию 22050 Hz для VITS)
+     * Воспроизведение FloatArray аудиоданных (нормализованные [-1, 1])
+     * Sherpa-ONNX TTS возвращает FloatArray
+     */
+    fun play(audioData: FloatArray, sampleRate: Int = SAMPLE_RATE) {
+        if (audioData.isEmpty()) {
+            Log.w(TAG, "Empty audio data")
+            return
+        }
+
+        // Конвертируем FloatArray в ShortArray
+        val shortData = floatToShort(audioData)
+        play(shortData, sampleRate)
+    }
+
+    /**
+     * Воспроизведение ShortArray аудиоданных (PCM 16-bit)
      */
     fun play(audioData: ShortArray, sampleRate: Int = SAMPLE_RATE) {
         if (audioData.isEmpty()) {
@@ -38,7 +51,6 @@ class AudioPlayer {
             isStopped.set(false)
             isPlaying.set(true)
 
-            // Создаем AudioTrack
             val bufferSize = AudioTrack.getMinBufferSize(
                 sampleRate,
                 AudioFormat.CHANNEL_OUT_MONO,
@@ -66,7 +78,6 @@ class AudioPlayer {
             audioTrack?.apply {
                 play()
 
-                // Записываем данные
                 var offset = 0
                 val chunkSize = bufferSize / 2
 
@@ -77,7 +88,6 @@ class AudioPlayer {
                     offset += toWrite
                 }
 
-                // Ждем окончания воспроизведения
                 while (playState == AudioTrack.PLAYSTATE_PLAYING && !isStopped.get()) {
                     Thread.sleep(50)
                 }
@@ -91,7 +101,31 @@ class AudioPlayer {
     }
 
     /**
-     * Асинхронное воспроизведение
+     * Конвертация FloatArray [-1, 1] в ShortArray [Short.MIN_VALUE, Short.MAX_VALUE]
+     */
+    private fun floatToShort(floatData: FloatArray): ShortArray {
+        val shortData = ShortArray(floatData.size)
+        for (i in floatData.indices) {
+            // Clip to [-1, 1]
+            val clamped = floatData[i].coerceIn(-1f, 1f)
+            // Convert to 16-bit signed integer
+            shortData[i] = (clamped * Short.MAX_VALUE).toInt().toShort()
+        }
+        return shortData
+    }
+
+    /**
+     * Асинхронное воспроизведение FloatArray
+     */
+    fun playAsync(audioData: FloatArray, sampleRate: Int = SAMPLE_RATE, onComplete: (() -> Unit)? = null) {
+        Thread {
+            play(audioData, sampleRate)
+            onComplete?.invoke()
+        }.start()
+    }
+
+    /**
+     * Асинхронное воспроизведение ShortArray
      */
     fun playAsync(audioData: ShortArray, sampleRate: Int = SAMPLE_RATE, onComplete: (() -> Unit)? = null) {
         Thread {

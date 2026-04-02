@@ -261,11 +261,19 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
     }
 
     /**
-     * Play audio using AudioTrack
+     * Play audio using AudioTrack (FloatArray from Sherpa TTS)
      */
-    private fun playAudio(audioData: ShortArray) {
+    private fun playAudio(audioData: FloatArray) {
         try {
-            val sampleRate = 22050  // Standard for VITS TTS
+            val sampleRate = ttsEngine.getSampleRate(Language.RUSSIAN) // Get actual sample rate
+            
+            // Convert FloatArray [-1, 1] to ShortArray [Short.MIN_VALUE, Short.MAX_VALUE]
+            val shortData = ShortArray(audioData.size) {
+                for (i in audioData.indices) {
+                    val clamped = audioData[i].coerceIn(-1f, 1f)
+                    shortData[i] = (clamped * Short.MAX_VALUE).toInt().toShort()
+                }
+            }
             
             val bufferSize = AudioTrack.getMinBufferSize(
                 sampleRate,
@@ -287,15 +295,15 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
                         .setEncoding(AudioFormat.ENCODING_PCM_16BIT)
                         .build()
                 )
-                .setBufferSizeInBytes(bufferSize.coerceAtLeast(audioData.size * 2))
+                .setBufferSizeInBytes(bufferSize.coerceAtLeast(shortData.size * 2))
                 .setTransferMode(AudioTrack.MODE_STREAM)
                 .build()
 
             audioTrack?.play()
-            audioTrack?.write(audioData, 0, audioData.size)
+            audioTrack?.write(shortData, 0, shortData.size)
             
             // Wait for playback to complete
-            Thread.sleep(audioData.size * 1000L / sampleRate + 100)
+            Thread.sleep(shortData.size * 1000L / sampleRate + 100)
             
             audioTrack?.stop()
             audioTrack?.release()
