@@ -8,14 +8,15 @@ import kotlinx.coroutines.withContext
 
 /**
  * Machine Translation using dictionary-based approach
- * 
+ *
  * For full NLLB-200 support, ONNX models would need to be added.
  * Currently uses a comprehensive dictionary for Russian-Chinese translation.
  */
-class NLLBTranslator(private val context: Context) {
+//noinspection SpellCheckingInspection
+class NllbTranslator(private val context: Context) {
 
     companion object {
-        private const val TAG = "NLLBTranslator"
+        private const val TAG = "NllbTranslator"
     }
 
     private var isInitialized = false

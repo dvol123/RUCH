@@ -2,7 +2,6 @@ package com.ruch.translator.viewmodel
 
 import android.app.Application
 import android.media.AudioFormat
-import android.media.AudioManager
 import android.media.AudioTrack
 import android.util.Log
 import androidx.lifecycle.AndroidViewModel
@@ -16,16 +15,16 @@ import com.ruch.translator.data.PreferencesManager
 import com.ruch.translator.data.ProcessingState
 import com.ruch.translator.stt.WhisperSTT
 import com.ruch.translator.tts.SherpaTTSEngine
-import com.ruch.translator.translation.NLLBTranslator
+import com.ruch.translator.translation.NllbTranslator
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.launch
 
 /**
  * Main ViewModel for RUCH Translator
- * 
+ *
  * Integrates:
  * - WhisperSTT for offline speech recognition
- * - NLLBTranslator for offline machine translation
+ * - NllbTranslator for offline machine translation
  * - SherpaTTSEngine for offline text-to-speech
  */
 class MainViewModel(application: Application) : AndroidViewModel(application) {
@@ -38,7 +37,7 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
 
     // AI Engines (Offline)
     private val whisperSTT = WhisperSTT(application)
-    private val translator = NLLBTranslator(application)
+    private val translator = NllbTranslator(application)
     private val ttsEngine = SherpaTTSEngine(application)
     
     // Audio components
@@ -54,9 +53,12 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
     private val _processingState = MutableLiveData<ProcessingState>()
     val processingState: LiveData<ProcessingState> = _processingState
 
+    // These are used for UI state but may not be observed in MainActivity yet
+    @Suppress("unused")
     private val _isRecordingRussian = MutableLiveData(false)
     val isRecordingRussian: LiveData<Boolean> = _isRecordingRussian
 
+    @Suppress("unused")
     private val _isRecordingChinese = MutableLiveData(false)
     val isRecordingChinese: LiveData<Boolean> = _isRecordingChinese
 
@@ -72,9 +74,12 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
     private val _modelsReady = MutableLiveData<Boolean>()
     val modelsReady: LiveData<Boolean> = _modelsReady
 
+    // These are used for UI state but may not be observed in MainActivity yet
+    @Suppress("unused")
     private val _isInitializing = MutableLiveData<Boolean>()
     val isInitializing: LiveData<Boolean> = _isInitializing
 
+    @Suppress("unused")
     private val _engineStatus = MutableLiveData<String>()
     val engineStatus: LiveData<String> = _engineStatus
 
@@ -104,7 +109,7 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
 
                 // Initialize Translator
                 val translatorReady = translator.initialize()
-                Log.i(TAG, "NLLB Translator initialized: $translatorReady")
+                Log.i(TAG, "NLLB Translator initialized: $translatorReady") //noinspection SpellCheckingInspection
 
                 // Initialize TTS
                 val ttsReady = ttsEngine.initialize()
@@ -311,6 +316,7 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
         }
     }
 
+    @Suppress("unused")
     fun stopSpeaking() {
         audioTrack?.stop()
         audioTrack?.release()
