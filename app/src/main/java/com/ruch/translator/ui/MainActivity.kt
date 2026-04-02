@@ -382,31 +382,11 @@ class MainActivity : AppCompatActivity() {
     }
     
     private fun checkModelsStatus() {
+        // Models are bundled in APK assets, no need to download
+        // Just observe initialization status
         viewModel.modelsReady.observe(this) { ready ->
-            if (!ready) {
-                showModelDownloadDialog()
-            }
-        }
-    }
-    
-    private fun showModelDownloadDialog() {
-        MaterialAlertDialogBuilder(this)
-            .setTitle(R.string.model_download_title)
-            .setMessage(R.string.model_download_message)
-            .setPositiveButton(android.R.string.ok) { _, _ ->
-                startModelDownload()
-            }
-            .setCancelable(false)
-            .show()
-    }
-    
-    private fun startModelDownload() {
-        Toast.makeText(this, R.string.model_downloading, Toast.LENGTH_LONG).show()
-        // Model download will be implemented in ModelDownloadService
-        // For now, simulate models ready
-        CoroutineScope(Dispatchers.Main).launch {
-            delay(1000)
-            viewModel.onModelsDownloaded()
+            // Models are ready when engines initialize successfully
+            // No download dialog needed - models are bundled in APK
         }
     }
     
