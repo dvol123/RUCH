@@ -3,13 +3,22 @@
 
 $ErrorActionPreference = "Stop"
 
-$PROJECT_ROOT = Split-Path -Parent $PSScriptRoot
+# Detect correct project root (handle both RUCH and RUCH_git structures)
+$PROJECT_ROOT = $PSScriptRoot
+while ($PROJECT_ROOT -and -not (Test-Path (Join-Path $PROJECT_ROOT "app\build.gradle.kts"))) {
+    $PROJECT_ROOT = Split-Path -Parent $PROJECT_ROOT
+}
+if (-not $PROJECT_ROOT) {
+    $PROJECT_ROOT = Split-Path -Parent $PSScriptRoot
+}
+
 $ASSETS_DIR = Join-Path $PROJECT_ROOT "app\src\main\assets\models"
 $JNI_DIR = Join-Path $PROJECT_ROOT "app\src\main\jniLibs"
 
 Write-Host "=============================================" -ForegroundColor Blue
 Write-Host "RUCH - Downloading models and libraries" -ForegroundColor Blue
 Write-Host "=============================================" -ForegroundColor Blue
+Write-Host "Project root: $PROJECT_ROOT" -ForegroundColor Gray
 Write-Host ""
 
 # Create directories
@@ -157,6 +166,9 @@ if (Test-Path $JNI_DIR) {
     Write-Host "Libraries: $([math]::Round($jniSize, 0)) MB"
 }
 
+Write-Host ""
+Write-Host "Models location: $ASSETS_DIR" -ForegroundColor Gray
+Write-Host "Libraries location: $JNI_DIR" -ForegroundColor Gray
 Write-Host ""
 Write-Host "You can now open the project in Android Studio" -ForegroundColor Yellow
 Write-Host "=============================================" -ForegroundColor Blue
