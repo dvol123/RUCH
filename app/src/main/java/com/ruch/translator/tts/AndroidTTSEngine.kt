@@ -1,7 +1,6 @@
 package com.ruch.translator.tts
 
 import android.content.Context
-import android.speech.tts.Locale
 import android.speech.tts.TextToSpeech
 import android.speech.tts.UtteranceProgressListener
 import android.util.Log
@@ -9,11 +8,12 @@ import com.ruch.translator.data.Language
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.suspendCancellableCoroutine
 import kotlinx.coroutines.withContext
+import java.io.File
+import java.util.Locale
 import kotlin.coroutines.resume
 
 /**
  * Text-to-Speech using Android's built-in TTS engine
- * Works offline on most devices
  */
 class AndroidTTSEngine(private val context: Context) : TextToSpeech.OnInitListener {
 
@@ -54,8 +54,8 @@ class AndroidTTSEngine(private val context: Context) : TextToSpeech.OnInitListen
     fun isReady(language: Language): Boolean {
         val ttsInstance = tts ?: return false
         val locale = when (language) {
-            Language.RUSSIAN -> java.util.Locale("ru", "RU")
-            Language.CHINESE -> java.util.Locale("zh", "CN")
+            Language.RUSSIAN -> Locale("ru", "RU")
+            Language.CHINESE -> Locale("zh", "CN")
         }
         
         val result = ttsInstance.isLanguageAvailable(locale)
@@ -70,14 +70,13 @@ class AndroidTTSEngine(private val context: Context) : TextToSpeech.OnInitListen
 
         val ttsInstance = tts!!
         val locale = when (language) {
-            Language.RUSSIAN -> java.util.Locale("ru", "RU")
-            Language.CHINESE -> java.util.Locale("zh", "CN")
+            Language.RUSSIAN -> Locale("ru", "RU")
+            Language.CHINESE -> Locale("zh", "CN")
         }
 
         ttsInstance.language = locale
 
-        // Use synthesizeToFile to get audio data
-        val outputFile = java.io.File(context.cacheDir, "tts_temp_${System.currentTimeMillis()}.wav")
+        val outputFile = File(context.cacheDir, "tts_temp_${System.currentTimeMillis()}.wav")
         
         suspendCancellableCoroutine<ShortArray?> { continuation ->
             ttsInstance.setOnUtteranceProgressListener(object : UtteranceProgressListener() {
@@ -87,7 +86,6 @@ class AndroidTTSEngine(private val context: Context) : TextToSpeech.OnInitListen
                     try {
                         if (outputFile.exists()) {
                             val bytes = outputFile.readBytes()
-                            // Convert WAV bytes to ShortArray (skip 44-byte header)
                             val shorts = ShortArray((bytes.size - 44) / 2)
                             for (i in shorts.indices) {
                                 shorts[i] = ((bytes[44 + i * 2 + 1].toInt() shl 8) or (bytes[44 + i * 2].toInt() and 0xFF)).toShort()

@@ -16,8 +16,8 @@ import androidx.core.view.WindowCompat
 import androidx.core.view.WindowInsetsCompat
 import com.google.android.material.dialog.MaterialAlertDialogBuilder
 import com.ruch.translator.BuildConfig
-import com.ruch.translator.Language
-import com.ruch.translator.ProcessingState
+import com.ruch.translator.data.Language
+import com.ruch.translator.data.ProcessingState
 import com.ruch.translator.R
 import com.ruch.translator.databinding.ActivityMainBinding
 import com.ruch.translator.viewmodel.MainViewModel
@@ -252,7 +252,7 @@ class MainActivity : AppCompatActivity() {
         
         viewModel.processingState.observe(this) { state ->
             binding.progressBar.visibility = when (state) {
-                ProcessingState.RECOGNIZING, ProcessingState.TRANSLATING -> View.VISIBLE
+                ProcessingState.RECORDING, ProcessingState.TRANSCRIBING, ProcessingState.TRANSLATING -> View.VISIBLE
                 else -> View.GONE
             }
         }

@@ -2,9 +2,7 @@ package com.ruch.translator.stt
 
 import android.content.Context
 import android.content.Intent
-import android.media.AudioFormat
-import android.media.AudioRecord
-import android.media.MediaRecorder
+import android.os.Bundle
 import android.speech.RecognitionListener
 import android.speech.RecognizerIntent
 import android.speech.SpeechRecognizer
@@ -15,11 +13,9 @@ import kotlinx.coroutines.suspendCancellableCoroutine
 import kotlinx.coroutines.withContext
 import java.util.Locale
 import kotlin.coroutines.resume
-import kotlin.coroutines.resumeWithException
 
 /**
  * Speech-to-Text using Android's built-in SpeechRecognizer
- * Works offline on most devices for basic recognition
  */
 class AndroidSpeechRecognizer(private val context: Context) {
 
@@ -46,8 +42,6 @@ class AndroidSpeechRecognizer(private val context: Context) {
     }
 
     suspend fun recognize(audioData: FloatArray, language: Language): String? {
-        // For Android SpeechRecognizer, we use intent-based recognition
-        // audioData parameter is ignored - we use live microphone input
         return listenOnce(language)
     }
 
