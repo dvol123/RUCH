@@ -52,6 +52,9 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
 
     private val _processingState = MutableLiveData<ProcessingState>()
     val processingState: LiveData<ProcessingState> = _processingState
+    
+    private val _recordingLanguage = MutableLiveData<Language?>()
+    val recordingLanguage: LiveData<Language?> = _recordingLanguage
 
     // These are used for UI state but may not be observed in MainActivity yet
     @Suppress("unused")
@@ -148,6 +151,8 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
     fun startRecording(language: Language) {
         if (_processingState.value != ProcessingState.IDLE) return
 
+        _recordingLanguage.value = language
+        
         currentJob = viewModelScope.launch {
             try {
                 _processingState.value = ProcessingState.RECORDING
@@ -162,6 +167,7 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
 
                 _isRecordingRussian.value = false
                 _isRecordingChinese.value = false
+                _recordingLanguage.value = null
 
                 if (audioData != null && audioData.isNotEmpty()) {
                     _processingState.value = ProcessingState.TRANSCRIBING
@@ -191,6 +197,7 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
                 _processingState.value = ProcessingState.IDLE
                 _isRecordingRussian.value = false
                 _isRecordingChinese.value = false
+                _recordingLanguage.value = null
             }
         }
     }

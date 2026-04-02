@@ -34,9 +34,6 @@ class MainActivity : AppCompatActivity() {
     private lateinit var binding: ActivityMainBinding
     private val viewModel: MainViewModel by viewModels()
     
-    private var isRecording = false
-    private var currentRecordingLanguage: Language? = null
-    
     private val requestPermissionLauncher = registerForActivityResult(
         ActivityResultContracts.RequestPermission()
     ) { isGranted: Boolean ->
@@ -263,30 +260,16 @@ class MainActivity : AppCompatActivity() {
             return
         }
         
-        if (isRecording && currentRecordingLanguage == language) {
+        val currentProcessingState = viewModel.processingState.value
+        
+        if (currentProcessingState == ProcessingState.RECORDING) {
             // Stop recording
             viewModel.stopRecording()
-            isRecording = false
-            currentRecordingLanguage = null
-            updateRecordingUI(null)
-        } else if (!isRecording) {
+        } else if (currentProcessingState == ProcessingState.IDLE) {
             // Start recording
-            isRecording = true
-            currentRecordingLanguage = language
-            updateRecordingUI(language)
             viewModel.startRecording(language)
-            
-            // Auto-stop after 15 seconds
-            CoroutineScope(Dispatchers.Main).launch {
-                delay(15000)
-                if (isRecording && currentRecordingLanguage == language) {
-                    viewModel.stopRecording()
-                    isRecording = false
-                    currentRecordingLanguage = null
-                    updateRecordingUI(null)
-                }
-            }
         }
+        // If transcribing/translating/speaking - ignore click
     }
     
     private fun updateRecordingUI(language: Language?) {
@@ -340,8 +323,12 @@ class MainActivity : AppCompatActivity() {
                     binding.progressBar.visibility = View.VISIBLE
                     binding.statusText.text = getString(R.string.recording)
                     binding.statusText.visibility = View.VISIBLE
+                    // Update recording UI based on which language is recording
+                    updateRecordingUI(viewModel.recordingLanguage.value)
                 }
                 ProcessingState.TRANSCRIBING -> {
+                    updateRecordingUI(null) // Stop recording visual
+                    binding.progressBar.visibility = View.VISIBLE
                     binding.statusText.text = getString(R.string.transcribing)
                     binding.statusText.visibility = View.VISIBLE
                 }
@@ -355,6 +342,7 @@ class MainActivity : AppCompatActivity() {
                     binding.statusText.visibility = View.VISIBLE
                 }
                 ProcessingState.IDLE -> {
+                    updateRecordingUI(null)
                     binding.progressBar.visibility = View.GONE
                     binding.statusText.visibility = View.GONE
                 }
@@ -400,10 +388,8 @@ class MainActivity : AppCompatActivity() {
     
     @Deprecated("Deprecated in Java")
     override fun onBackPressed() {
-        if (isRecording) {
+        if (viewModel.processingState.value == ProcessingState.RECORDING) {
             viewModel.stopRecording()
-            isRecording = false
-            currentRecordingLanguage = null
             updateRecordingUI(null)
         } else {
             @Suppress("DEPRECATION")

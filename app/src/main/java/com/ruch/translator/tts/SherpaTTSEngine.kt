@@ -50,20 +50,36 @@ class SherpaTTSEngine(private val context: Context) {
 
     private fun initTTS(assetDir: String, langCode: String): Boolean {
         return try {
+            Log.d(TAG, "Initializing TTS for $langCode from $assetDir")
+            
+            // Check if assets exist
+            val assetFiles = context.assets.list(assetDir) ?: emptyArray()
+            Log.d(TAG, "Assets in $assetDir: ${assetFiles.toList()}")
+            
+            if (assetFiles.isEmpty()) {
+                Log.e(TAG, "No assets found in $assetDir")
+                return false
+            }
+            
             val modelDir = copyTTSModels(assetDir, langCode)
             
             // Find .onnx file
             val onnxFiles = modelDir.listFiles()?.filter { it.extension == "onnx" }
+            Log.d(TAG, "ONNX files in ${modelDir.absolutePath}: ${onnxFiles?.map { it.name }}")
+            
             if (onnxFiles.isNullOrEmpty()) {
-                Log.w(TAG, "No ONNX model for $langCode")
+                Log.e(TAG, "No ONNX model for $langCode in ${modelDir.absolutePath}")
                 return false
             }
             
             val modelFile = onnxFiles.first()
             val tokensFile = File(modelDir, TOKENS_TXT)
             
+            Log.d(TAG, "Model: ${modelFile.absolutePath}, exists=${modelFile.exists()}")
+            Log.d(TAG, "Tokens: ${tokensFile.absolutePath}, exists=${tokensFile.exists()}")
+            
             if (!tokensFile.exists()) {
-                Log.w(TAG, "No tokens.txt for $langCode")
+                Log.e(TAG, "No tokens.txt for $langCode")
                 return false
             }
 
@@ -77,12 +93,13 @@ class SherpaTTSEngine(private val context: Context) {
                         lengthScale = 1.0f
                     ),
                     numThreads = 2,
-                    debug = false,
+                    debug = true,
                     provider = "cpu"
                 ),
                 maxNumSentences = 1
             )
 
+            Log.d(TAG, "Creating OfflineTts for $langCode...")
             val tts = OfflineTts(context.assets, config)
             
             if (langCode == "ru") {
@@ -90,6 +107,7 @@ class SherpaTTSEngine(private val context: Context) {
             } else {
                 chineseTts = tts
             }
+            Log.i(TAG, "TTS $langCode initialized successfully")
             true
         } catch (e: Exception) {
             Log.e(TAG, "TTS init error ($langCode): ${e.message}", e)
