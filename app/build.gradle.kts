@@ -93,11 +93,12 @@ dependencies {
     // ========== AI/ML Libraries ==========
     
     // Sherpa-ONNX for STT (Whisper) and TTS
-    // From: https://github.com/k2-fsa/sherpa-onnx
-    implementation("com.k2fsa.sherpa:sherpa-onnx:1.10.15")
+    // Download AAR from: https://github.com/k2-fsa/sherpa-onnx/releases
+    // Put in app/libs/sherpa-onnx.aar
+    implementation(files("libs/sherpa-onnx.aar"))
     
-    // ONNX Runtime for NLLB-200 translation
-    implementation("com.microsoft.onnxruntime:onnxruntime-android:1.16.3")
+    // ONNX Runtime for NLLB-200 translation (included in sherpa-onnx.aar)
+    // implementation("com.microsoft.onnxruntime:onnxruntime-android:1.16.3")
     
     // ========== Data & Networking ==========
     

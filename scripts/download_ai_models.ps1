@@ -1,6 +1,7 @@
 # Download AI models for RUCH Translator (Windows PowerShell)
 # 
 # This script downloads:
+# 0. Sherpa-ONNX AAR library
 # 1. Whisper small (int8) - for Speech-to-Text
 # 2. NLLB-200 distilled (int8) - for Machine Translation  
 # 3. VITS TTS models - for Text-to-Speech (Russian and Chinese)
@@ -8,6 +9,7 @@
 $ErrorActionPreference = "Continue"
 
 $MODELS_DIR = "app\src\main\assets\models"
+$LIBS_DIR = "app\libs"
 $WHISPER_DIR = "$MODELS_DIR\whisper"
 $NLLB_DIR = "$MODELS_DIR\nllb"
 $TTS_DIR = "$MODELS_DIR\tts"
@@ -165,16 +167,48 @@ Write-Host "RUCH Translator - Model Download Script"
 Write-Host "=========================================="
 
 # Create directories
+New-Item -ItemType Directory -Force -Path $LIBS_DIR | Out-Null
 New-Item -ItemType Directory -Force -Path $WHISPER_DIR | Out-Null
 New-Item -ItemType Directory -Force -Path $NLLB_DIR | Out-Null
 New-Item -ItemType Directory -Force -Path "$TTS_DIR\ru" | Out-Null
 New-Item -ItemType Directory -Force -Path "$TTS_DIR\zh" | Out-Null
 
 # ==========================================
+# 0. Download Sherpa-ONNX AAR Library
+# ==========================================
+Write-Host ""
+Write-Host "[0/4] Downloading Sherpa-ONNX library..."
+
+$SHERPA_AAR_URL = "https://github.com/k2-fsa/sherpa-onnx/releases/download/v1.12.34/sherpa-onnx-1.12.34.aar"
+$SHERPA_AAR_PATH = "$LIBS_DIR\sherpa-onnx.aar"
+
+if (-not (Test-Path $SHERPA_AAR_PATH)) {
+    Write-Host "Downloading sherpa-onnx AAR (~50 MB)..."
+    
+    $success = Download-WithCurl -Url $SHERPA_AAR_URL -Output "$env:TEMP\sherpa-onnx.aar" -Description "Sherpa-ONNX"
+    
+    if (-not $success) {
+        $success = Download-WithInvokeWebRequest -Url $SHERPA_AAR_URL -Output "$env:TEMP\sherpa-onnx.aar" -Description "Sherpa-ONNX"
+    }
+    
+    if ($success) {
+        Move-Item "$env:TEMP\sherpa-onnx.aar" $SHERPA_AAR_PATH -Force
+        Write-Host "OK - Sherpa-ONNX library downloaded"
+    } else {
+        Write-Host "FAILED - Could not download Sherpa-ONNX AAR"
+        Write-Host "Please download manually from:"
+        Write-Host "  $SHERPA_AAR_URL"
+        Write-Host "And save to: $SHERPA_AAR_PATH"
+    }
+} else {
+    Write-Host "OK - Sherpa-ONNX library already exists"
+}
+
+# ==========================================
 # 1. Download Whisper Model (STT)
 # ==========================================
 Write-Host ""
-Write-Host "[1/3] Downloading Whisper model for Speech-to-Text..."
+Write-Host "[1/4] Downloading Whisper model for Speech-to-Text..."
 
 $WHISPER_URL = "https://github.com/k2-fsa/sherpa-onnx/releases/download/asr-models/sherpa-onnx-whisper-small.tar.bz2"
 $WHISPER_TEMP = "$env:TEMP\whisper-small.tar.bz2"
@@ -221,7 +255,7 @@ if (-not (Test-Path "$WHISPER_DIR\encoder-epoch-99-int8.onnx")) {
 # 2. Download NLLB-200 Model (Translation)
 # ==========================================
 Write-Host ""
-Write-Host "[2/3] NLLB-200 model for Machine Translation..."
+Write-Host "[2/4] NLLB-200 model for Machine Translation..."
 Write-Host "Note: NLLB-200 ONNX models require manual conversion."
 Write-Host "Using dictionary fallback for now."
 
@@ -234,7 +268,7 @@ if (-not (Test-Path "$NLLB_DIR\vocab.json")) {
 # 3. Download TTS Models
 # ==========================================
 Write-Host ""
-Write-Host "[3/3] Downloading TTS models for Text-to-Speech..."
+Write-Host "[3/4] Downloading TTS models for Text-to-Speech..."
 
 # Russian TTS - vits-mms-rus (MMS model from Meta)
 $RU_TTS_URLS = @(
@@ -350,16 +384,25 @@ Write-Host "Model download summary"
 Write-Host "=========================================="
 Write-Host ""
 
+$sherpaExists = Test-Path "$LIBS_DIR\sherpa-onnx.aar"
 $whisperExists = Test-Path "$WHISPER_DIR\encoder-epoch-99-int8.onnx"
 $ruTtsExists = Test-Path "$TTS_DIR\ru\model.onnx"
 $zhTtsExists = Test-Path "$TTS_DIR\zh\model.onnx"
 
+Write-Host "Sherpa-ONNX:    $(if ($sherpaExists) { 'OK' } else { 'MISSING' })"
 Write-Host "Whisper STT:    $(if ($whisperExists) { 'OK' } else { 'MISSING' })"
 Write-Host "Russian TTS:    $(if ($ruTtsExists) { 'OK' } else { 'MISSING' })"
 Write-Host "Chinese TTS:    $(if ($zhTtsExists) { 'OK' } else { 'MISSING' })"
 Write-Host ""
-Write-Host "Models location: $MODELS_DIR"
+Write-Host "Library: $LIBS_DIR"
+Write-Host "Models:  $MODELS_DIR"
 Write-Host ""
+
+if (-not $sherpaExists) {
+    Write-Host "ERROR: Sherpa-ONNX AAR is missing - build will fail!"
+    Write-Host "Download from: https://github.com/k2-fsa/sherpa-onnx/releases/download/v1.12.34/sherpa-onnx-1.12.34.aar"
+    Write-Host "Save to: $LIBS_DIR\sherpa-onnx.aar"
+}
 
 if (-not $whisperExists -or -not $ruTtsExists -or -not $zhTtsExists) {
     Write-Host "WARNING: Some models are missing!"
@@ -367,8 +410,10 @@ if (-not $whisperExists -or -not $ruTtsExists -or -not $zhTtsExists) {
     Write-Host "  1. Check your internet connection"
     Write-Host "  2. Run the script again"
     Write-Host "  3. Download models manually using the URLs above"
-    Write-Host "  4. Use a VPN if GitHub/HuggingFace is blocked"
-} else {
-    Write-Host "All models downloaded successfully!"
+    Write-Host "  4. Use a VPN if GitHub is blocked"
+}
+
+if ($sherpaExists -and $whisperExists -and $ruTtsExists -and $zhTtsExists) {
+    Write-Host "All files downloaded successfully!"
     Write-Host "You can now build the APK in Android Studio."
 }

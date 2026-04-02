@@ -5,6 +5,7 @@ REM curl is more reliable for large downloads on Windows
 setlocal enabledelayedexpansion
 
 set MODELS_DIR=app\src\main\assets\models
+set LIBS_DIR=app\libs
 set WHISPER_DIR=%MODELS_DIR%\whisper
 set NLLB_DIR=%MODELS_DIR%\nllb
 set TTS_DIR=%MODELS_DIR%\tts
@@ -15,6 +16,7 @@ echo ==========================================
 echo.
 
 REM Create directories
+if not exist "%LIBS_DIR%" mkdir "%LIBS_DIR%"
 if not exist "%WHISPER_DIR%" mkdir "%WHISPER_DIR%"
 if not exist "%NLLB_DIR%" mkdir "%NLLB_DIR%"
 if not exist "%TTS_DIR%\ru" mkdir "%TTS_DIR%\ru"
@@ -29,9 +31,36 @@ if %ERRORLEVEL% neq 0 (
 )
 
 REM ==========================================
+REM 0. Download Sherpa-ONNX AAR
+REM ==========================================
+echo [0/4] Downloading Sherpa-ONNX library...
+
+if exist "%LIBS_DIR%\sherpa-onnx.aar" (
+    echo OK - Sherpa-ONNX AAR already exists
+) else (
+    echo Downloading sherpa-onnx AAR ~50 MB...
+    
+    curl -L -o "%TEMP%\sherpa-onnx.aar" ^
+        --retry 5 --retry-delay 10 ^
+        --connect-timeout 60 --max-time 600 ^
+        "https://github.com/k2-fsa/sherpa-onnx/releases/download/v1.12.34/sherpa-onnx-1.12.34.aar"
+    
+    if exist "%TEMP%\sherpa-onnx.aar" (
+        move "%TEMP%\sherpa-onnx.aar" "%LIBS_DIR%\sherpa-onnx.aar" >nul
+        echo OK - Sherpa-ONNX AAR downloaded
+    ) else (
+        echo FAILED - Could not download Sherpa-ONNX AAR
+        echo Download manually from:
+        echo https://github.com/k2-fsa/sherpa-onnx/releases/download/v1.12.34/sherpa-onnx-1.12.34.aar
+        echo Save to: %LIBS_DIR%\sherpa-onnx.aar
+    )
+)
+
+REM ==========================================
 REM 1. Download Whisper Model (STT)
 REM ==========================================
-echo [1/3] Downloading Whisper model for Speech-to-Text...
+echo.
+echo [1/4] Downloading Whisper model for Speech-to-Text...
 
 if exist "%WHISPER_DIR%\encoder-epoch-99-int8.onnx" (
     echo OK - Whisper model already exists
@@ -67,7 +96,7 @@ REM ==========================================
 REM 2. NLLB-200 placeholder
 REM ==========================================
 echo.
-echo [2/3] NLLB-200 model - using dictionary fallback
+echo [2/4] NLLB-200 model - using dictionary fallback
 
 if not exist "%NLLB_DIR%\vocab.json" (
     echo {} > "%NLLB_DIR%\vocab.json"
@@ -77,7 +106,7 @@ REM ==========================================
 REM 3. Download TTS Models
 REM ==========================================
 echo.
-echo [3/3] Downloading TTS models for Text-to-Speech...
+echo [3/4] Downloading TTS models for Text-to-Speech...
 
 REM Russian TTS
 if exist "%TTS_DIR%\ru\model.onnx" (
@@ -149,32 +178,47 @@ REM Summary
 REM ==========================================
 echo.
 echo ==========================================
-echo Model download summary
+echo Download summary
 echo ==========================================
 echo.
 
-if exist "%WHISPER_DIR%\encoder-epoch-99-int8.onnx" (
-    echo Whisper STT:    OK
+if exist "%LIBS_DIR%\sherpa-onnx.aar" (
+    echo Sherpa-ONNX:   OK
 ) else (
-    echo Whisper STT:    MISSING
+    echo Sherpa-ONNX:   MISSING - BUILD WILL FAIL!
+)
+
+if exist "%WHISPER_DIR%\encoder-epoch-99-int8.onnx" (
+    echo Whisper STT:   OK
+) else (
+    echo Whisper STT:   MISSING
 )
 
 if exist "%TTS_DIR%\ru\model.onnx" (
-    echo Russian TTS:    OK
+    echo Russian TTS:   OK
 ) else (
-    echo Russian TTS:    MISSING
+    echo Russian TTS:   MISSING
 )
 
 if exist "%TTS_DIR%\zh\model.onnx" (
-    echo Chinese TTS:    OK
+    echo Chinese TTS:   OK
 ) else (
-    echo Chinese TTS:    MISSING
+    echo Chinese TTS:   MISSING
 )
 
 echo.
-echo Models location: %MODELS_DIR%
+echo Library: %LIBS_DIR%
+echo Models:  %MODELS_DIR%
 echo.
-echo If some models failed to download:
+
+if not exist "%LIBS_DIR%\sherpa-onnx.aar" (
+    echo ERROR: Sherpa-ONNX AAR is required!
+    echo Download: https://github.com/k2-fsa/sherpa-onnx/releases/download/v1.12.34/sherpa-onnx-1.12.34.aar
+    echo Save to: %LIBS_DIR%\sherpa-onnx.aar
+    echo.
+)
+
+echo If downloads failed:
 echo   1. Check your internet connection
 echo   2. Run this script again
 echo   3. Try using a VPN
