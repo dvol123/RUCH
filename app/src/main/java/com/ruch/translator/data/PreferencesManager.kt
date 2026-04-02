@@ -17,7 +17,6 @@ class PreferencesManager(private val context: Context) {
     companion object {
         private val THEME_KEY = intPreferencesKey("theme_mode")
         private val MODELS_DOWNLOADED_KEY = booleanPreferencesKey("models_downloaded")
-        private val TTS_SPEED_KEY = floatPreferencesKey("tts_speed")
     }
     
     fun getTheme(): Int {
@@ -46,13 +45,13 @@ class PreferencesManager(private val context: Context) {
     
     fun getTtsSpeed(): Float {
         return context.getSharedPreferences("settings", Context.MODE_PRIVATE)
-            .getFloat(TTS_SPEED_KEY.name, 1.0f)
+            .getFloat("tts_speed", 1.0f)
     }
     
     suspend fun setTtsSpeed(speed: Float) {
         context.getSharedPreferences("settings", Context.MODE_PRIVATE)
             .edit()
-            .putFloat(TTS_SPEED_KEY.name, speed)
+            .putFloat("tts_speed", speed)
             .apply()
     }
     

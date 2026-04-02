@@ -5,6 +5,8 @@ import androidx.lifecycle.AndroidViewModel
 import androidx.lifecycle.LiveData
 import androidx.lifecycle.MutableLiveData
 import androidx.lifecycle.viewModelScope
+import com.ruch.translator.Language
+import com.ruch.translator.ProcessingState
 import com.ruch.translator.R
 import com.ruch.translator.data.PreferencesManager
 import com.ruch.translator.stt.SpeechRecognizer
@@ -12,25 +14,6 @@ import com.ruch.translator.translation.TranslatorEngine
 import com.ruch.translator.tts.TTSEngine
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.launch
-
-enum class Language {
-    RUSSIAN,
-    CHINESE
-}
-
-enum class ProcessingState {
-    IDLE,
-    RECORDING,
-    RECOGNIZING,
-    TRANSLATING,
-    SPEAKING
-}
-
-data class TranslationResult(
-    val sourceLanguage: Language,
-    val sourceText: String,
-    val targetText: String
-)
 
 class MainViewModel(application: Application) : AndroidViewModel(application) {
     
@@ -189,7 +172,7 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
     
     fun stopSpeaking() {
         ttsEngine.stop()
-        _isSpeakingRussian.value = false
+        _isRecordingRussian.value = false
         _isSpeakingChinese.value = false
         _processingState.value = ProcessingState.IDLE
     }

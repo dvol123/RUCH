@@ -80,16 +80,26 @@ class SentencePieceTokenizer(modelPath: String) {
         }
         
         // Use id-to-piece mapping
-        return tokens.mapNotNull { id ->
-            pieces.getOrNull(id)
-        }.joinToString("").replace("▁", " ").trim()
+        val result = StringBuilder()
+        for (id in tokens) {
+            val piece = pieces.getOrNull(id)
+            if (piece != null) {
+                result.append(piece.replace("▁", " "))
+            }
+        }
+        return result.toString().trim()
     }
     
     private fun simpleDecode(tokens: IntArray): String {
         // For demonstration - in real implementation this would use the vocabulary
-        return tokens.drop(1).map { 
-            Char(it and 0xFFFF).toString() 
-        }.joinToString("")
+        val result = StringBuilder()
+        for (i in tokens.indices) {
+            if (i > 0) { // Skip language token
+                val tokenId = tokens[i]
+                result.append(Char(tokenId and 0xFFFF))
+            }
+        }
+        return result.toString()
     }
     
     private fun getLangTokenId(langCode: String): Int {

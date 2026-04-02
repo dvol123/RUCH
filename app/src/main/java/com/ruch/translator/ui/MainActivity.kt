@@ -3,13 +3,11 @@ package com.ruch.translator.ui
 import android.Manifest
 import android.content.pm.PackageManager
 import android.os.Bundle
-import android.view.MenuItem
 import android.view.View
 import android.view.inputmethod.InputMethodManager
 import android.widget.Toast
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.activity.viewModels
-import androidx.appcompat.app.AlertDialog
 import androidx.appcompat.app.AppCompatActivity
 import androidx.appcompat.app.AppCompatDelegate
 import androidx.core.content.ContextCompat
@@ -17,6 +15,7 @@ import androidx.core.view.ViewCompat
 import androidx.core.view.WindowCompat
 import androidx.core.view.WindowInsetsCompat
 import com.google.android.material.dialog.MaterialAlertDialogBuilder
+import com.ruch.translator.BuildConfig
 import com.ruch.translator.Language
 import com.ruch.translator.ProcessingState
 import com.ruch.translator.R
@@ -217,9 +216,6 @@ class MainActivity : AppCompatActivity() {
     }
     
     private fun setupTextWatchers() {
-        var russianTextChangeJob: kotlinx.coroutines.Job? = null
-        var chineseTextChangeJob: kotlinx.coroutines.Job? = null
-        
         binding.russianText.setOnFocusChangeListener { _, hasFocus ->
             if (!hasFocus) {
                 hideKeyboard()
