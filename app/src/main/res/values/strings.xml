@@ -1,0 +1,52 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="app_name">RUCH</string>
+    <string name="russian">Русский</string>
+    <string name="chinese">中文</string>
+    
+    <!-- Buttons -->
+    <string name="btn_microphone">Микрофон</string>
+    <string name="btn_keyboard">Клавиатура</string>
+    <string name="btn_speaker">Динамик</string>
+    
+    <!-- Menu -->
+    <string name="menu_theme">Тема оформления</string>
+    <string name="theme_system">Системная</string>
+    <string name="theme_light">Светлая</string>
+    <string name="theme_dark">Тёмная</string>
+    <string name="menu_bookmarks">Закладки</string>
+    <string name="menu_streaming">Потоковый перевод</string>
+    <string name="menu_history">История переводов</string>
+    <string name="menu_tts_settings">Настройки синтеза речи</string>
+    <string name="menu_about">О приложении</string>
+    <string name="in_development">В разработке</string>
+    
+    <!-- Messages -->
+    <string name="recording">Запись...</string>
+    <string name="processing">Обработка...</string>
+    <string name="translating">Перевод...</string>
+    <string name="speaking">Воспроизведение...</string>
+    <string name="error_recognition">Ошибка распознавания</string>
+    <string name="error_translation">Ошибка перевода</string>
+    <string name="error_tts">Ошибка синтеза речи</string>
+    <string name="error_no_text">Нет текста для обработки</string>
+    <string name="permission_required">Требуется разрешение на запись аудио</string>
+    
+    <!-- Model -->
+    <string name="model_download_title">Загрузка моделей</string>
+    <string name="model_download_message">Для работы требуется загрузить языковые модели (~2 ГБ)</string>
+    <string name="model_downloading">Загрузка моделей…</string>
+    <string name="model_extracting">Распаковка моделей…</string>
+    <string name="model_ready">Модели готовы</string>
+    <string name="model_error">Ошибка загрузки моделей</string>
+    
+    <!-- About -->
+    <string name="about_version">Версия: %s</string>
+    <string name="about_description">Офлайн голосовой переводчик\nРусский ↔ 中文</string>
+    <string name="about_licenses">Лицензии</string>
+    
+    <!-- Placeholders -->
+    <string name="enter_text_russian">Введите текст на русском</string>
+    <string name="enter_text_chinese">输入中文</string>
+    <string name="translation_placeholder">Перевод появится здесь</string>
+</resources>

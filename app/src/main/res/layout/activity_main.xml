@@ -1,0 +1,238 @@
+<?xml version="1.0" encoding="utf-8"?>
+<androidx.coordinatorlayout.widget.CoordinatorLayout
+    xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:app="http://schemas.android.com/apk/res-auto"
+    xmlns:tools="http://schemas.android.com/tools"
+    android:id="@+id/root_layout"
+    android:layout_width="match_parent"
+    android:layout_height="match_parent"
+    android:fitsSystemWindows="true"
+    tools:context=".ui.MainActivity">
+
+    <com.google.android.material.appbar.AppBarLayout
+        android:id="@+id/app_bar_layout"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:fitsSystemWindows="true">
+
+        <com.google.android.material.appbar.MaterialToolbar
+            android:id="@+id/toolbar"
+            android:layout_width="match_parent"
+            android:layout_height="?attr/actionBarSize"
+            app:title="@string/app_name"
+            app:navigationIcon="@drawable/ic_menu"
+            style="@style/Widget.MaterialComponents.Toolbar.Primary" />
+
+    </com.google.android.material.appbar.AppBarLayout>
+
+    <androidx.core.widget.NestedScrollView
+        android:layout_width="match_parent"
+        android:layout_height="match_parent"
+        android:fillViewport="true"
+        android:fitsSystemWindows="true"
+        app:layout_behavior="@string/appbar_scrolling_view_behavior">
+
+        <LinearLayout
+            android:layout_width="match_parent"
+            android:layout_height="match_parent"
+            android:orientation="vertical"
+            android:paddingBottom="24dp">
+
+            <!-- Russian Language Section -->
+            <com.google.android.material.card.MaterialCardView
+                android:id="@+id/russian_card"
+                android:layout_width="match_parent"
+                android:layout_height="0dp"
+                android:layout_weight="1"
+                android:layout_margin="8dp"
+                app:cardBackgroundColor="@color/russian_field_bg"
+                app:cardCornerRadius="16dp"
+                app:cardElevation="4dp">
+
+                <LinearLayout
+                    android:layout_width="match_parent"
+                    android:layout_height="match_parent"
+                    android:orientation="vertical"
+                    android:padding="12dp">
+
+                    <TextView
+                        android:id="@+id/russian_label"
+                        android:layout_width="wrap_content"
+                        android:layout_height="wrap_content"
+                        android:text="@string/russian"
+                        android:textAllCaps="true"
+                        android:textStyle="bold"
+                        android:textColor="@color/primary_dark"
+                        android:layout_marginBottom="8dp" />
+
+                    <ScrollView
+                        android:layout_width="match_parent"
+                        android:layout_height="0dp"
+                        android:layout_weight="1"
+                        android:fillViewport="true">
+
+                        <EditText
+                            android:id="@+id/russian_text"
+                            android:layout_width="match_parent"
+                            android:layout_height="wrap_content"
+                            android:minHeight="80dp"
+                            android:background="@android:color/transparent"
+                            android:gravity="top|start"
+                            android:hint="@string/enter_text_russian"
+                            android:inputType="textMultiLine"
+                            android:textSize="18sp"
+                            android:lineSpacingMultiplier="1.3"
+                            android:imeOptions="actionDone"
+                            android:importantForAutofill="no" />
+
+                    </ScrollView>
+
+                    <!-- Control Buttons for Russian -->
+                    <LinearLayout
+                        android:layout_width="match_parent"
+                        android:layout_height="wrap_content"
+                        android:orientation="horizontal"
+                        android:gravity="center"
+                        android:layout_marginTop="8dp">
+
+                        <ImageButton
+                            android:id="@+id/russian_mic_btn"
+                            android:layout_width="56dp"
+                            android:layout_height="56dp"
+                            android:src="@drawable/ic_mic"
+                            android:contentDescription="@string/btn_microphone"
+                            android:backgroundTint="@color/button_inactive"
+                            style="@style/Widget.MaterialComponents.Button" />
+
+                        <ImageButton
+                            android:id="@+id/russian_keyboard_btn"
+                            android:layout_width="56dp"
+                            android:layout_height="56dp"
+                            android:layout_marginStart="16dp"
+                            android:src="@drawable/ic_edit"
+                            android:contentDescription="@string/btn_keyboard"
+                            android:backgroundTint="@color/button_inactive"
+                            style="@style/Widget.MaterialComponents.Button" />
+
+                        <ImageButton
+                            android:id="@+id/russian_speaker_btn"
+                            android:layout_width="56dp"
+                            android:layout_height="56dp"
+                            android:layout_marginStart="16dp"
+                            android:src="@drawable/ic_speaker"
+                            android:contentDescription="@string/btn_speaker"
+                            android:backgroundTint="@color/button_inactive"
+                            style="@style/Widget.MaterialComponents.Button" />
+
+                    </LinearLayout>
+
+                </LinearLayout>
+
+            </com.google.android.material.card.MaterialCardView>
+
+            <!-- Progress Indicator -->
+            <ProgressBar
+                android:id="@+id/progress_bar"
+                android:layout_width="match_parent"
+                android:layout_height="4dp"
+                android:indeterminate="true"
+                android:visibility="gone"
+                style="@style/Widget.MaterialComponents.ProgressBar.Horizontal" />
+
+            <!-- Chinese Language Section -->
+            <com.google.android.material.card.MaterialCardView
+                android:id="@+id/chinese_card"
+                android:layout_width="match_parent"
+                android:layout_height="0dp"
+                android:layout_weight="1"
+                android:layout_margin="8dp"
+                app:cardBackgroundColor="@color/chinese_field_bg"
+                app:cardCornerRadius="16dp"
+                app:cardElevation="4dp">
+
+                <LinearLayout
+                    android:layout_width="match_parent"
+                    android:layout_height="match_parent"
+                    android:orientation="vertical"
+                    android:padding="12dp">
+
+                    <TextView
+                        android:id="@+id/chinese_label"
+                        android:layout_width="wrap_content"
+                        android:layout_height="wrap_content"
+                        android:text="@string/chinese"
+                        android:textAllCaps="true"
+                        android:textStyle="bold"
+                        android:textColor="@color/accent"
+                        android:layout_marginBottom="8dp" />
+
+                    <ScrollView
+                        android:layout_width="match_parent"
+                        android:layout_height="0dp"
+                        android:layout_weight="1"
+                        android:fillViewport="true">
+
+                        <EditText
+                            android:id="@+id/chinese_text"
+                            android:layout_width="match_parent"
+                            android:layout_height="wrap_content"
+                            android:minHeight="80dp"
+                            android:background="@android:color/transparent"
+                            android:gravity="top|start"
+                            android:hint="@string/enter_text_chinese"
+                            android:inputType="textMultiLine"
+                            android:textSize="18sp"
+                            android:lineSpacingMultiplier="1.3"
+                            android:imeOptions="actionDone"
+                            android:importantForAutofill="no" />
+
+                    </ScrollView>
+
+                    <!-- Control Buttons for Chinese -->
+                    <LinearLayout
+                        android:layout_width="match_parent"
+                        android:layout_height="wrap_content"
+                        android:orientation="horizontal"
+                        android:gravity="center"
+                        android:layout_marginTop="8dp">
+
+                        <ImageButton
+                            android:id="@+id/chinese_mic_btn"
+                            android:layout_width="56dp"
+                            android:layout_height="56dp"
+                            android:src="@drawable/ic_mic"
+                            android:contentDescription="@string/btn_microphone"
+                            android:backgroundTint="@color/button_inactive"
+                            style="@style/Widget.MaterialComponents.Button" />
+
+                        <ImageButton
+                            android:id="@+id/chinese_keyboard_btn"
+                            android:layout_width="56dp"
+                            android:layout_height="56dp"
+                            android:layout_marginStart="16dp"
+                            android:src="@drawable/ic_edit"
+                            android:contentDescription="@string/btn_keyboard"
+                            android:backgroundTint="@color/button_inactive"
+                            style="@style/Widget.MaterialComponents.Button" />
+
+                        <ImageButton
+                            android:id="@+id/chinese_speaker_btn"
+                            android:layout_width="56dp"
+                            android:layout_height="56dp"
+                            android:layout_marginStart="16dp"
+                            android:src="@drawable/ic_speaker"
+                            android:contentDescription="@string/btn_speaker"
+                            android:backgroundTint="@color/button_inactive"
+                            style="@style/Widget.MaterialComponents.Button" />
+
+                    </LinearLayout>
+
+                </LinearLayout>
+
+            </com.google.android.material.card.MaterialCardView>
+
+        </LinearLayout>
+
+    </androidx.core.widget.NestedScrollView>
+
+</androidx.coordinatorlayout.widget.CoordinatorLayout>
