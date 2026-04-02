@@ -63,13 +63,6 @@ android {
     androidResources {
         noCompress += listOf("bin", "onnx", "json", "txt", "model")
     }
-
-    // JNI libraries
-    sourceSets {
-        getByName("main") {
-            jniLibs.srcDirs("src/main/jniLibs")
-        }
-    }
 }
 
 dependencies {

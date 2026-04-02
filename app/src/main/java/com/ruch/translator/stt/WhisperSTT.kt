@@ -1,6 +1,7 @@
 package com.ruch.translator.stt
 
 import android.content.Context
+import android.content.res.AssetManager
 import android.util.Log
 import com.k2fsa.sherpa.onnx.*
 import com.ruch.translator.data.Language
@@ -54,15 +55,12 @@ class WhisperSTT(private val context: Context) {
                 return@withContext false
             }
 
-            // Create Whisper config
-            val config = getWhisperConfig(modelsDir.absolutePath)
+            // Create recognizer using AssetManager
+            recognizer = createRecognizer(context.assets, modelsDir.absolutePath)
             
-            // Create recognizer
-            recognizer = OfflineRecognizer(config)
-            
-            isInitialized = true
-            Log.i(TAG, "Whisper STT initialized successfully")
-            true
+            isInitialized = recognizer != null
+            Log.i(TAG, "Whisper STT initialized: $isInitialized")
+            isInitialized
         } catch (e: Exception) {
             Log.e(TAG, "Failed to initialize Whisper STT: ${e.message}", e)
             isInitialized = false
@@ -71,31 +69,39 @@ class WhisperSTT(private val context: Context) {
     }
 
     /**
-     * Get Whisper configuration for sherpa-onnx
+     * Create Whisper recognizer using sherpa-onnx API
      */
-    private fun getWhisperConfig(modelDir: String): OfflineRecognizerConfig {
-        return OfflineRecognizerConfig(
-            featConfig = FeatureConfig(
-                sampleRate = 16000,
-                featureDim = 80
-            ),
-            modelConfig = OfflineModelConfig(
-                whisper = OfflineWhisperModelConfig(
-                    encoder = "$modelDir/$ENCODER_FILE",
-                    decoder = "$modelDir/$DECODER_FILE",
-                    tokens = "$modelDir/$TOKENS_FILE",
-                    language = "auto",  // Auto-detect language
-                    task = "transcribe",
-                    tailPaddings = -1
+    private fun createRecognizer(assetManager: AssetManager, modelDir: String): OfflineRecognizer? {
+        return try {
+            // Create config using the sherpa-onnx API
+            val config = OfflineRecognizerConfig(
+                featConfig = FeatureConfig(
+                    sampleRate = 16000,
+                    featureDim = 80
                 ),
-                tokens = "$modelDir/$TOKENS_FILE",
-                numThreads = 4,
-                debug = false,
-                provider = "cpu"
-            ),
-            decodingMethod = "greedy_search",
-            maxActivePaths = 4
-        )
+                modelConfig = OfflineModelConfig(
+                    whisper = OfflineWhisperModelConfig(
+                        encoder = "$modelDir/$ENCODER_FILE",
+                        decoder = "$modelDir/$DECODER_FILE",
+                        tokens = "$modelDir/$TOKENS_FILE",
+                        language = "auto",
+                        task = "transcribe",
+                        tailPaddings = -1
+                    ),
+                    numThreads = 4,
+                    debug = false,
+                    provider = "cpu"
+                ),
+                decodingMethod = "greedy_search",
+                maxActivePaths = 4
+            )
+            
+            // Create recognizer with AssetManager and config
+            OfflineRecognizer(assetManager, config)
+        } catch (e: Exception) {
+            Log.e(TAG, "Failed to create recognizer: ${e.message}", e)
+            null
+        }
     }
 
     /**
@@ -149,7 +155,6 @@ class WhisperSTT(private val context: Context) {
                 Language.RUSSIAN -> "ru"
                 Language.CHINESE -> "zh"
             }
-            // Note: Whisper auto-detects language, but we can provide hint
             
             // Accept waveform data (16kHz, mono)
             stream.acceptWaveform(audioData, 16000)

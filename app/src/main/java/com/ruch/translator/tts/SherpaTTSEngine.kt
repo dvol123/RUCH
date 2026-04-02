@@ -1,6 +1,7 @@
 package com.ruch.translator.tts
 
 import android.content.Context
+import android.content.res.AssetManager
 import android.util.Log
 import com.k2fsa.sherpa.onnx.*
 import com.ruch.translator.data.Language
@@ -27,8 +28,7 @@ class SherpaTTSEngine(private val context: Context) {
         // Model file names
         private const val MODEL_ONNX = "model.onnx"
         private const val TOKENS_TXT = "tokens.txt"
-        private const val LEXICON_TXT = "lexicon.txt"  // For some models
-        private const val DICT_DIR = "dict"  // For Chinese models
+        private const val DICT_DIR = "dict"
     }
 
     private var russianTts: OfflineTts? = null
@@ -75,26 +75,10 @@ class SherpaTTSEngine(private val context: Context) {
                 return false
             }
 
-            val config = OfflineTtsConfig(
-                modelConfig = OfflineTtsModelConfig(
-                    vits = OfflineTtsVitsModelConfig(
-                        model = modelFile.absolutePath,
-                        tokens = tokensFile.absolutePath,
-                        noiseScale = 0.667f,
-                        noiseScaleW = 0.8f,
-                        lengthScale = 1.0f
-                    ),
-                    numThreads = 2,
-                    debug = false,
-                    provider = "cpu"
-                ),
-                maxNumSenetences = 1
-            )
-
-            russianTts = OfflineTts(config)
-            true
+            russianTts = createTts(context.assets, modelDir.absolutePath)
+            russianTts != null
         } catch (e: Exception) {
-            Log.e(TAG, "Russian TTS init error: ${e.message}")
+            Log.e(TAG, "Russian TTS init error: ${e.message}", e)
             false
         }
     }
@@ -113,27 +97,50 @@ class SherpaTTSEngine(private val context: Context) {
                 return false
             }
 
-            val config = OfflineTtsConfig(
-                modelConfig = OfflineTtsModelConfig(
-                    vits = OfflineTtsVitsModelConfig(
-                        model = modelFile.absolutePath,
-                        tokens = tokensFile.absolutePath,
-                        noiseScale = 0.667f,
-                        noiseScaleW = 0.8f,
-                        lengthScale = 1.0f
-                    ),
-                    numThreads = 2,
-                    debug = false,
-                    provider = "cpu"
-                ),
-                maxNumSenetences = 1
-            )
-
-            chineseTts = OfflineTts(config)
-            true
+            chineseTts = createTts(context.assets, modelDir.absolutePath)
+            chineseTts != null
         } catch (e: Exception) {
-            Log.e(TAG, "Chinese TTS init error: ${e.message}")
+            Log.e(TAG, "Chinese TTS init error: ${e.message}", e)
             false
+        }
+    }
+
+    /**
+     * Create TTS using sherpa-onnx API
+     */
+    private fun createTts(assetManager: AssetManager, modelDir: String): OfflineTts? {
+        return try {
+            val modelPath = "$modelDir/$MODEL_ONNX"
+            val tokensPath = "$modelDir/$TOKENS_TXT"
+            
+            // Create VITS model config
+            val vitsConfig = OfflineTtsVitsModelConfig(
+                model = modelPath,
+                tokens = tokensPath,
+                noiseScale = 0.667f,
+                noiseScaleW = 0.8f,
+                lengthScale = 1.0f
+            )
+            
+            // Create model config
+            val modelConfig = OfflineTtsModelConfig(
+                vits = vitsConfig,
+                numThreads = 2,
+                debug = false,
+                provider = "cpu"
+            )
+            
+            // Create TTS config
+            val config = OfflineTtsConfig(
+                modelConfig = modelConfig,
+                maxNumSenetences = 1  // Note: intentional typo in sherpa-onnx API
+            )
+            
+            // Create TTS with AssetManager
+            OfflineTts(assetManager, config)
+        } catch (e: Exception) {
+            Log.e(TAG, "Failed to create TTS: ${e.message}", e)
+            null
         }
     }
 
@@ -146,22 +153,38 @@ class SherpaTTSEngine(private val context: Context) {
             destDir.mkdirs()
         }
 
-        // List of files to copy
-        val filesToCopy = listOf(MODEL_ONNX, TOKENS_TXT, LEXICON_TXT)
-        
-        for (fileName in filesToCopy) {
-            val destFile = File(destDir, fileName)
-            if (!destFile.exists()) {
-                try {
-                    context.assets.open("$assetDir/$fileName").use { input ->
-                        FileOutputStream(destFile).use { output ->
-                            input.copyTo(output)
+        // Copy all .onnx files
+        try {
+            val assetFiles = context.assets.list(assetDir) ?: emptyArray()
+            for (fileName in assetFiles) {
+                if (fileName.endsWith(".onnx")) {
+                    val destFile = File(destDir, MODEL_ONNX)
+                    if (!destFile.exists()) {
+                        context.assets.open("$assetDir/$fileName").use { input ->
+                            FileOutputStream(destFile).use { output ->
+                                input.copyTo(output)
+                            }
                         }
+                        Log.d(TAG, "Copied ONNX model: $fileName")
                     }
-                    Log.d(TAG, "Copied TTS file: $fileName")
-                } catch (e: Exception) {
-                    // File might not exist for all models
                 }
+            }
+        } catch (e: Exception) {
+            Log.w(TAG, "Error copying ONNX model: ${e.message}")
+        }
+
+        // Copy tokens.txt
+        val tokensFile = File(destDir, TOKENS_TXT)
+        if (!tokensFile.exists()) {
+            try {
+                context.assets.open("$assetDir/$TOKENS_TXT").use { input ->
+                    FileOutputStream(tokensFile).use { output ->
+                        input.copyTo(output)
+                    }
+                }
+                Log.d(TAG, "Copied tokens.txt")
+            } catch (e: Exception) {
+                Log.w(TAG, "Error copying tokens.txt: ${e.message}")
             }
         }
 
@@ -217,13 +240,19 @@ class SherpaTTSEngine(private val context: Context) {
             Log.d(TAG, "Synthesizing: $text (${language.getDisplayName()})")
             
             // Generate audio
-            val audio = tts.generate(text, speed = speed)
+            val audio = tts.generate(text, speed)
             
-            if (audio != null && audio.samples.isNotEmpty()) {
-                Log.d(TAG, "Generated ${audio.samples.size} samples at ${audio.sampleRate}Hz")
-                audio.samples
+            if (audio != null) {
+                val samples = audio.samples
+                if (samples != null && samples.isNotEmpty()) {
+                    Log.d(TAG, "Generated ${samples.size} samples at ${audio.sampleRate}Hz")
+                    samples
+                } else {
+                    Log.e(TAG, "TTS generation returned empty result")
+                    null
+                }
             } else {
-                Log.e(TAG, "TTS generation returned empty result")
+                Log.e(TAG, "TTS generation returned null")
                 null
             }
         } catch (e: Exception) {
