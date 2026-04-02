@@ -1,23 +1,33 @@
 package com.ruch.translator.viewmodel
 
 import android.app.Application
-import android.speech.tts.TextToSpeech
+import android.media.AudioFormat
+import android.media.AudioManager
+import android.media.AudioTrack
 import android.util.Log
 import androidx.lifecycle.AndroidViewModel
 import androidx.lifecycle.LiveData
 import androidx.lifecycle.MutableLiveData
 import androidx.lifecycle.viewModelScope
 import com.ruch.translator.R
-import com.ruch.translator.audio.AudioPlayer
 import com.ruch.translator.audio.AudioRecorder
 import com.ruch.translator.data.Language
 import com.ruch.translator.data.PreferencesManager
 import com.ruch.translator.data.ProcessingState
-import com.ruch.translator.stt.AndroidSpeechRecognizer
-import com.ruch.translator.translation.OfflineTranslator
+import com.ruch.translator.stt.WhisperSTT
+import com.ruch.translator.tts.SherpaTTSEngine
+import com.ruch.translator.translation.NLLBTranslator
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.launch
 
+/**
+ * Main ViewModel for RUCH Translator
+ * 
+ * Integrates:
+ * - WhisperSTT for offline speech recognition
+ * - NLLBTranslator for offline machine translation
+ * - SherpaTTSEngine for offline text-to-speech
+ */
 class MainViewModel(application: Application) : AndroidViewModel(application) {
 
     companion object {
@@ -26,18 +36,15 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
 
     private val preferencesManager = PreferencesManager(application)
 
-    // Android API based engines (no JNI required)
-    private val speechRecognizer = AndroidSpeechRecognizer(application)
-    private val translator = OfflineTranslator(application)
-
+    // AI Engines (Offline)
+    private val whisperSTT = WhisperSTT(application)
+    private val translator = NLLBTranslator(application)
+    private val ttsEngine = SherpaTTSEngine(application)
+    
     // Audio components
     private val audioRecorder = AudioRecorder(application)
-    private val audioPlayer = AudioPlayer()
 
-    // Android TTS
-    private var tts: TextToSpeech? = null
-    private var ttsReady = false
-
+    // UI State
     private val _russianText = MutableLiveData<String>()
     val russianText: LiveData<String> = _russianText
 
@@ -68,47 +75,57 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
     private val _isInitializing = MutableLiveData<Boolean>()
     val isInitializing: LiveData<Boolean> = _isInitializing
 
+    private val _engineStatus = MutableLiveData<String>()
+    val engineStatus: LiveData<String> = _engineStatus
+
     private var currentJob: Job? = null
+    private var audioTrack: AudioTrack? = null
 
     init {
         _russianText.value = ""
         _chineseText.value = ""
         _processingState.value = ProcessingState.IDLE
         _isInitializing.value = true
+        _modelsReady.value = false
         initializeEngines()
     }
 
+    /**
+     * Initialize all AI engines
+     */
     private fun initializeEngines() {
         viewModelScope.launch {
             try {
-                // Initialize STT
-                val sttReady = speechRecognizer.initialize()
-                Log.i(TAG, "STT initialized: $sttReady")
+                _engineStatus.value = getApplication<Application>().getString(R.string.model_downloading)
+                
+                // Initialize Whisper STT
+                val sttReady = whisperSTT.initialize()
+                Log.i(TAG, "Whisper STT initialized: $sttReady")
 
                 // Initialize Translator
                 val translatorReady = translator.initialize()
-                Log.i(TAG, "Translator initialized: $translatorReady")
+                Log.i(TAG, "NLLB Translator initialized: $translatorReady")
 
                 // Initialize TTS
-                initTTS()
+                val ttsReady = ttsEngine.initialize()
+                Log.i(TAG, "Sherpa TTS initialized: $ttsReady")
 
-                _modelsReady.value = true
+                val allReady = sttReady || translatorReady || ttsReady
+                _modelsReady.value = allReady
                 _isInitializing.value = false
+                
+                val status = buildString {
+                    append("STT: ${if (sttReady) "✓" else "✗"}")
+                    append(" | MT: ${if (translatorReady) "✓" else "✗"}")
+                    append(" | TTS: ${if (ttsReady) "✓" else "✗"}")
+                }
+                _engineStatus.value = status
+                
+                Log.i(TAG, "All engines initialized. Ready: $allReady")
             } catch (e: Exception) {
                 Log.e(TAG, "Engine initialization error: ${e.message}", e)
                 _isInitializing.value = false
                 _errorMessage.value = "Initialization error: ${e.message}"
-            }
-        }
-    }
-
-    private fun initTTS() {
-        tts = TextToSpeech(getApplication()) { status ->
-            if (status == TextToSpeech.SUCCESS) {
-                ttsReady = true
-                Log.i(TAG, "TTS initialized successfully")
-            } else {
-                Log.e(TAG, "TTS initialization failed")
             }
         }
     }
@@ -120,7 +137,9 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
         }
     }
 
-    // Speech Recognition
+    /**
+     * Start voice recording and recognition
+     */
     fun startRecording(language: Language) {
         if (_processingState.value != ProcessingState.IDLE) return
 
@@ -133,23 +152,30 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
                     _isRecordingChinese.value = true
                 }
 
-                // Use Android SpeechRecognizer
-                val text = speechRecognizer.listenOnce(language)
+                // Record audio using AudioRecorder
+                val audioData = audioRecorder.recordAudio(maxDurationSeconds = 15)
 
                 _isRecordingRussian.value = false
                 _isRecordingChinese.value = false
 
-                if (!text.isNullOrEmpty()) {
-                    _processingState.value = ProcessingState.TRANSLATING
+                if (audioData != null && audioData.isNotEmpty()) {
+                    _processingState.value = ProcessingState.TRANSCRIBING
 
-                    if (language == Language.RUSSIAN) {
-                        _russianText.value = text
-                        val translated = translator.translate(text, Language.RUSSIAN, Language.CHINESE)
-                        _chineseText.value = translated
-                    } else {
-                        _chineseText.value = text
-                        val translated = translator.translate(text, Language.CHINESE, Language.RUSSIAN)
-                        _russianText.value = translated
+                    // Transcribe with Whisper
+                    val text = whisperSTT.transcribe(audioData, language)
+
+                    if (!text.isNullOrEmpty()) {
+                        _processingState.value = ProcessingState.TRANSLATING
+
+                        if (language == Language.RUSSIAN) {
+                            _russianText.value = text
+                            val translated = translator.translate(text, Language.RUSSIAN, Language.CHINESE)
+                            _chineseText.value = translated
+                        } else {
+                            _chineseText.value = text
+                            val translated = translator.translate(text, Language.CHINESE, Language.RUSSIAN)
+                            _russianText.value = translated
+                        }
                     }
                 }
 
@@ -168,7 +194,9 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
         audioRecorder.stopRecording()
     }
 
-    // Text Translation
+    /**
+     * Translate text from one language to another
+     */
     fun translateText(sourceLanguage: Language, text: String) {
         if (text.isEmpty()) return
 
@@ -194,14 +222,11 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
         }
     }
 
-    // Text-to-Speech
+    /**
+     * Speak text using TTS
+     */
     fun speakText(language: Language, text: String) {
-        if (text.isEmpty() || !ttsReady) {
-            if (!ttsReady) {
-                _errorMessage.value = "TTS not ready"
-            }
-            return
-        }
+        if (text.isEmpty()) return
 
         currentJob = viewModelScope.launch {
             try {
@@ -212,18 +237,15 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
                     _isSpeakingChinese.value = true
                 }
 
-                val locale = when (language) {
-                    Language.RUSSIAN -> java.util.Locale("ru", "RU")
-                    Language.CHINESE -> java.util.Locale("zh", "CN")
+                // Synthesize speech
+                val audioData = ttsEngine.synthesize(text, language)
+
+                if (audioData != null && audioData.isNotEmpty()) {
+                    // Play audio
+                    playAudio(audioData)
+                } else {
+                    _errorMessage.value = getApplication<Application>().getString(R.string.error_tts)
                 }
-
-                tts?.language = locale
-
-                // Use speak() for direct playback
-                tts?.speak(text, TextToSpeech.QUEUE_FLUSH, null, "tts_utterance")
-
-                // Wait a bit for speech to complete
-                Thread.sleep(text.length * 80L + 500)
 
                 _isSpeakingRussian.value = false
                 _isSpeakingChinese.value = false
@@ -238,8 +260,55 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
         }
     }
 
+    /**
+     * Play audio using AudioTrack
+     */
+    private fun playAudio(audioData: ShortArray) {
+        try {
+            val sampleRate = 22050  // Standard for VITS TTS
+            
+            val bufferSize = AudioTrack.getMinBufferSize(
+                sampleRate,
+                AudioFormat.CHANNEL_OUT_MONO,
+                AudioFormat.ENCODING_PCM_16BIT
+            )
+
+            audioTrack = AudioTrack.Builder()
+                .setAudioAttributes(
+                    android.media.AudioAttributes.Builder()
+                        .setUsage(android.media.AudioAttributes.USAGE_MEDIA)
+                        .setContentType(android.media.AudioAttributes.CONTENT_TYPE_SPEECH)
+                        .build()
+                )
+                .setAudioFormat(
+                    AudioFormat.Builder()
+                        .setSampleRate(sampleRate)
+                        .setChannelMask(AudioFormat.CHANNEL_OUT_MONO)
+                        .setEncoding(AudioFormat.ENCODING_PCM_16BIT)
+                        .build()
+                )
+                .setBufferSizeInBytes(bufferSize.coerceAtLeast(audioData.size * 2))
+                .setTransferMode(AudioTrack.MODE_STREAM)
+                .build()
+
+            audioTrack?.play()
+            audioTrack?.write(audioData, 0, audioData.size)
+            
+            // Wait for playback to complete
+            Thread.sleep(audioData.size * 1000L / sampleRate + 100)
+            
+            audioTrack?.stop()
+            audioTrack?.release()
+            audioTrack = null
+        } catch (e: Exception) {
+            Log.e(TAG, "Audio playback error: ${e.message}", e)
+        }
+    }
+
     fun stopSpeaking() {
-        tts?.stop()
+        audioTrack?.stop()
+        audioTrack?.release()
+        audioTrack = null
         _isSpeakingRussian.value = false
         _isSpeakingChinese.value = false
         _processingState.value = ProcessingState.IDLE
@@ -260,10 +329,10 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
 
     override fun onCleared() {
         super.onCleared()
-        speechRecognizer.release()
-        tts?.shutdown()
+        whisperSTT.release()
         translator.release()
+        ttsEngine.release()
         audioRecorder.release()
-        audioPlayer.release()
+        audioTrack?.release()
     }
 }
