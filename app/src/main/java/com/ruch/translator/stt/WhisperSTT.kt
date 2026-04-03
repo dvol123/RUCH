@@ -85,12 +85,13 @@ class WhisperSTT(private val context: Context) {
                     decoder = "$modelDir/$DECODER_FILE",
                     language = "auto",
                     task = "transcribe",
-                    tailPaddings = 0
+                    tailPaddings = 1000  // Default value from official sherpa-onnx examples
                 ),
                 tokens = "$modelDir/$TOKENS_FILE",
-                numThreads = 2,  // Reduced from 4 to be safer
+                numThreads = 2,
                 debug = false,
-                provider = "cpu"
+                provider = "cpu",
+                modelType = "whisper"  // CRITICAL: Must specify model type!
             ),
             decodingMethod = "greedy_search"
         )
