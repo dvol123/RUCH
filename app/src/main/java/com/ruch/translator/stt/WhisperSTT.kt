@@ -54,14 +54,14 @@ class WhisperSTT(private val context: Context) {
                 return@withContext false
             }
 
-            Log.d(TAG, "Encoder: ${encoderFile.absolutePath}, size=${encoderFile.length()}")
-            Log.d(TAG, "Decoder: ${decoderFile.absolutePath}, size=${decoderFile.length()}")
-            Log.d(TAG, "Tokens: ${tokensFile.absolutePath}, size=${tokensFile.length()}")
+            Log.i(TAG, "Encoder: ${encoderFile.absolutePath}, size=${encoderFile.length()}")
+            Log.i(TAG, "Decoder: ${decoderFile.absolutePath}, size=${decoderFile.length()}")
+            Log.i(TAG, "Tokens: ${tokensFile.absolutePath}, size=${tokensFile.length()}")
 
             // Create config with absolute paths to files on filesystem
             val config = createConfig(modelsDir.absolutePath)
             
-            Log.d(TAG, "Creating OfflineRecognizer...")
+            Log.i(TAG, "Creating OfflineRecognizer...")
             // Use null for assetManager since we're using file paths, not assets
             recognizer = OfflineRecognizer(null, config)
             
@@ -85,10 +85,10 @@ class WhisperSTT(private val context: Context) {
                     decoder = "$modelDir/$DECODER_FILE",
                     language = "auto",
                     task = "transcribe",
-                    tailPaddings = 0  // Set to 0 to avoid crash with short audio
+                    tailPaddings = 0
                 ),
                 tokens = "$modelDir/$TOKENS_FILE",
-                numThreads = 4,
+                numThreads = 2,  // Reduced from 4 to be safer
                 debug = false,
                 provider = "cpu"
             ),
@@ -136,34 +136,46 @@ class WhisperSTT(private val context: Context) {
 
         var stream: OfflineStream? = null
         try {
-            Log.d(TAG, "Transcribing ${audioData.size} samples (${audioData.size / 16000.0f}s)")
+            val durationSec = audioData.size / 16000.0f
+            Log.i(TAG, "=== Transcribing ${audioData.size} samples ($durationSec s) ===")
             
-            // Whisper expects at least 30 seconds of audio (480000 samples at 16kHz)
-            // Pad with zeros if audio is shorter
-            val minSamples = 16000 * 30  // 30 seconds
-            val paddedAudio = if (audioData.size < minSamples) {
-                Log.d(TAG, "Padding audio from ${audioData.size} to $minSamples samples")
-                FloatArray(minSamples) { i -> if (i < audioData.size) audioData[i] else 0f }
-            } else {
-                audioData
+            // Whisper requires minimum 0.5 seconds of audio
+            if (audioData.size < 8000) {  // 0.5 seconds at 16kHz
+                Log.e(TAG, "Audio too short: ${audioData.size} samples")
+                return@withContext null
             }
             
             stream = recognizer!!.createStream()
-            stream.acceptWaveform(paddedAudio, 16000)
+            Log.i(TAG, "Stream created")
+            
+            stream.acceptWaveform(audioData, 16000)
+            Log.i(TAG, "Waveform accepted")
+            
             recognizer!!.decode(stream)
+            Log.i(TAG, "Decode complete")
+            
             val result = recognizer!!.getResult(stream)
+            Log.i(TAG, "Result obtained")
             
             val text = result.text.trim()
-            Log.d(TAG, "Transcribed: $text")
+            Log.i(TAG, "Transcribed: '$text'")
+            
             text.ifEmpty { null }
+        } catch (e: OutOfMemoryError) {
+            Log.e(TAG, "OutOfMemoryError in transcribe", e)
+            null
+        } catch (e: UnsatisfiedLinkError) {
+            Log.e(TAG, "Native error in transcribe: ${e.message}", e)
+            null
         } catch (e: Exception) {
             Log.e(TAG, "Transcribe error: ${e.message}", e)
             null
-        } catch (e: UnsatisfiedLinkError) {
-            Log.e(TAG, "Native error: ${e.message}", e)
-            null
         } finally {
-            stream?.release()
+            try {
+                stream?.release()
+            } catch (e: Exception) {
+                Log.e(TAG, "Error releasing stream: ${e.message}")
+            }
         }
     }
 
@@ -175,15 +187,7 @@ class WhisperSTT(private val context: Context) {
             stream = recognizer!!.createStream()
             val wave = WaveReader.readWave(audioPath)
             if (wave != null && wave.samples.isNotEmpty()) {
-                // Pad with zeros if audio is shorter than 30 seconds
-                val minSamples = 16000 * 30
-                val paddedAudio = if (wave.samples.size < minSamples) {
-                    FloatArray(minSamples) { i -> if (i < wave.samples.size) wave.samples[i] else 0f }
-                } else {
-                    wave.samples
-                }
-                
-                stream.acceptWaveform(paddedAudio, wave.sampleRate)
+                stream.acceptWaveform(wave.samples, wave.sampleRate)
                 recognizer!!.decode(stream)
                 val result = recognizer!!.getResult(stream)
                 result.text.trim().ifEmpty { null }
@@ -197,14 +201,22 @@ class WhisperSTT(private val context: Context) {
             Log.e(TAG, "Native error: ${e.message}", e)
             null
         } finally {
-            stream?.release()
+            try {
+                stream?.release()
+            } catch (e: Exception) {
+                Log.e(TAG, "Error releasing stream: ${e.message}")
+            }
         }
     }
 
     fun isReady(): Boolean = isInitialized && recognizer != null
 
     fun release() {
-        recognizer?.release()
+        try {
+            recognizer?.release()
+        } catch (e: Exception) {
+            Log.e(TAG, "Error releasing recognizer: ${e.message}")
+        }
         recognizer = null
         isInitialized = false
         Log.i(TAG, "Released")

@@ -206,6 +206,14 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
 
                     // Transcribe with Whisper
                     Log.i(TAG, "=== Starting transcription (${audioData.size} samples, ${audioData.size/16000.0f}s) ===")
+                    
+                    // Show toast for debugging (remove after fix)
+                    android.widget.Toast.makeText(
+                        getApplication(), 
+                        "Распознавание: ${audioData.size/16000.0f}с", 
+                        android.widget.Toast.LENGTH_SHORT
+                    ).show()
+                    
                     val text = whisperSTT.transcribe(audioData, language)
                     Log.i(TAG, "=== Transcription result: $text ===")
 
@@ -221,9 +229,12 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
                             val translated = translator.translate(text, Language.CHINESE, Language.RUSSIAN)
                             _russianText.value = translated
                         }
+                    } else {
+                        _errorMessage.value = "Не удалось распознать речь"
                     }
                 } else {
                     Log.w(TAG, "Audio too short or null (${audioData?.size ?: 0} samples), skipping transcription")
+                    _errorMessage.value = "Аудио слишком короткое"
                 }
 
                 _processingState.value = ProcessingState.IDLE
@@ -238,14 +249,14 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
                 _recordingLanguage.value = null
             } catch (e: UnsatisfiedLinkError) {
                 Log.e(TAG, "Native library error: ${e.message}", e)
-                _errorMessage.value = "Ошибка нативной библиотеки"
+                _errorMessage.value = "Ошибка нативной библиотеки: ${e.message}"
                 _processingState.value = ProcessingState.IDLE
                 _isRecordingRussian.value = false
                 _isRecordingChinese.value = false
                 _recordingLanguage.value = null
             } catch (e: Exception) {
                 Log.e(TAG, "Recording error: ${e.message}", e)
-                _errorMessage.value = getApplication<Application>().getString(R.string.error_recognition)
+                _errorMessage.value = "Ошибка: ${e.message}"
                 _processingState.value = ProcessingState.IDLE
                 _isRecordingRussian.value = false
                 _isRecordingChinese.value = false
