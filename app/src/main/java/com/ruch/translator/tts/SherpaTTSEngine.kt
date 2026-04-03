@@ -21,6 +21,8 @@ class SherpaTTSEngine(private val context: Context) {
         private const val CHINESE_TTS_DIR = "models/tts/zh"
         
         private const val TOKENS_TXT = "tokens.txt"
+        private const val LEXICON_TXT = "lexicon.txt"
+        private const val RULE_FAR = "rule.far"
     }
 
     private var russianTts: OfflineTts? = null
@@ -33,10 +35,10 @@ class SherpaTTSEngine(private val context: Context) {
         try {
             Log.i(TAG, "Initializing Sherpa TTS...")
 
-            val ruSuccess = initTTS(RUSSIAN_TTS_DIR, "ru")
+            val ruSuccess = initRussianTTS()
             Log.i(TAG, "Russian TTS: $ruSuccess")
 
-            val zhSuccess = initTTS(CHINESE_TTS_DIR, "zh")
+            val zhSuccess = initChineseTTS()
             Log.i(TAG, "Chinese TTS: $zhSuccess")
 
             isInitialized = ruSuccess || zhSuccess
@@ -48,38 +50,29 @@ class SherpaTTSEngine(private val context: Context) {
         }
     }
 
-    private fun initTTS(assetDir: String, langCode: String): Boolean {
+    private fun initRussianTTS(): Boolean {
         return try {
-            Log.d(TAG, "Initializing TTS for $langCode from $assetDir")
+            Log.d(TAG, "Initializing Russian TTS from $RUSSIAN_TTS_DIR")
             
-            // Check if assets exist
-            val assetFiles = context.assets.list(assetDir) ?: emptyArray()
-            Log.d(TAG, "Assets in $assetDir: ${assetFiles.toList()}")
+            val assetFiles = context.assets.list(RUSSIAN_TTS_DIR) ?: emptyArray()
+            Log.d(TAG, "Assets in $RUSSIAN_TTS_DIR: ${assetFiles.toList()}")
             
             if (assetFiles.isEmpty()) {
-                Log.e(TAG, "No assets found in $assetDir")
+                Log.e(TAG, "No assets found in $RUSSIAN_TTS_DIR")
                 return false
             }
             
-            val modelDir = copyTTSModels(assetDir, langCode)
+            val modelDir = copyTTSModels(RUSSIAN_TTS_DIR, "ru")
             
-            // Find .onnx file
-            val onnxFiles = modelDir.listFiles()?.filter { it.extension == "onnx" }
-            Log.d(TAG, "ONNX files in ${modelDir.absolutePath}: ${onnxFiles?.map { it.name }}")
-            
-            if (onnxFiles.isNullOrEmpty()) {
-                Log.e(TAG, "No ONNX model for $langCode in ${modelDir.absolutePath}")
-                return false
-            }
-            
-            val modelFile = onnxFiles.first()
+            // Find model.onnx (Russian uses model.onnx)
+            val modelFile = File(modelDir, "model.onnx")
             val tokensFile = File(modelDir, TOKENS_TXT)
             
             Log.d(TAG, "Model: ${modelFile.absolutePath}, exists=${modelFile.exists()}")
             Log.d(TAG, "Tokens: ${tokensFile.absolutePath}, exists=${tokensFile.exists()}")
             
-            if (!tokensFile.exists()) {
-                Log.e(TAG, "No tokens.txt for $langCode")
+            if (!modelFile.exists() || !tokensFile.exists()) {
+                Log.e(TAG, "Missing Russian TTS files")
                 return false
             }
 
@@ -99,18 +92,83 @@ class SherpaTTSEngine(private val context: Context) {
                 maxNumSentences = 1
             )
 
-            Log.d(TAG, "Creating OfflineTts for $langCode...")
-            val tts = OfflineTts(context.assets, config)
-            
-            if (langCode == "ru") {
-                russianTts = tts
-            } else {
-                chineseTts = tts
-            }
-            Log.i(TAG, "TTS $langCode initialized successfully")
+            Log.d(TAG, "Creating Russian OfflineTts...")
+            russianTts = OfflineTts(context.assets, config)
+            Log.i(TAG, "Russian TTS initialized successfully")
             true
         } catch (e: Exception) {
-            Log.e(TAG, "TTS init error ($langCode): ${e.message}", e)
+            Log.e(TAG, "Russian TTS init error: ${e.message}", e)
+            false
+        }
+    }
+
+    private fun initChineseTTS(): Boolean {
+        return try {
+            Log.d(TAG, "Initializing Chinese TTS from $CHINESE_TTS_DIR")
+            
+            val assetFiles = context.assets.list(CHINESE_TTS_DIR) ?: emptyArray()
+            Log.d(TAG, "Assets in $CHINESE_TTS_DIR: ${assetFiles.toList()}")
+            
+            if (assetFiles.isEmpty()) {
+                Log.e(TAG, "No assets found in $CHINESE_TTS_DIR")
+                return false
+            }
+            
+            val modelDir = copyTTSModels(CHINESE_TTS_DIR, "zh")
+            
+            // Chinese TTS uses vits-aishell3.int8.onnx
+            val modelFile = File(modelDir, "vits-aishell3.int8.onnx")
+            val tokensFile = File(modelDir, TOKENS_TXT)
+            val lexiconFile = File(modelDir, LEXICON_TXT)
+            val ruleFarFile = File(modelDir, RULE_FAR)
+            
+            Log.d(TAG, "Model: ${modelFile.absolutePath}, exists=${modelFile.exists()}")
+            Log.d(TAG, "Tokens: ${tokensFile.absolutePath}, exists=${tokensFile.exists()}")
+            Log.d(TAG, "Lexicon: ${lexiconFile.absolutePath}, exists=${lexiconFile.exists()}")
+            Log.d(TAG, "Rule.far: ${ruleFarFile.absolutePath}, exists=${ruleFarFile.exists()}")
+            
+            if (!modelFile.exists() || !tokensFile.exists()) {
+                Log.e(TAG, "Missing Chinese TTS files")
+                return false
+            }
+
+            // Chinese needs lexicon for proper pronunciation
+            val vitsConfig = if (lexiconFile.exists()) {
+                OfflineTtsVitsModelConfig(
+                    model = modelFile.absolutePath,
+                    lexicon = lexiconFile.absolutePath,
+                    tokens = tokensFile.absolutePath,
+                    noiseScale = 0.667f,
+                    noiseScaleW = 0.8f,
+                    lengthScale = 1.0f
+                )
+            } else {
+                OfflineTtsVitsModelConfig(
+                    model = modelFile.absolutePath,
+                    tokens = tokensFile.absolutePath,
+                    noiseScale = 0.667f,
+                    noiseScaleW = 0.8f,
+                    lengthScale = 1.0f
+                )
+            }
+
+            val config = OfflineTtsConfig(
+                model = OfflineTtsModelConfig(
+                    vits = vitsConfig,
+                    numThreads = 2,
+                    debug = true,
+                    provider = "cpu"
+                ),
+                ruleFars = if (ruleFarFile.exists()) ruleFarFile.absolutePath else "",
+                maxNumSentences = 1
+            )
+
+            Log.d(TAG, "Creating Chinese OfflineTts...")
+            chineseTts = OfflineTts(context.assets, config)
+            Log.i(TAG, "Chinese TTS initialized successfully")
+            true
+        } catch (e: Exception) {
+            Log.e(TAG, "Chinese TTS init error: ${e.message}", e)
             false
         }
     }
@@ -133,23 +191,6 @@ class SherpaTTSEngine(private val context: Context) {
                         }
                     }
                     Log.d(TAG, "Copied: $fileName")
-                }
-            }
-            
-            // Copy dict directory if exists
-            val dictDir = File(destDir, "dict")
-            if (!dictDir.exists()) {
-                dictDir.mkdirs()
-            }
-            val dictFiles = context.assets.list("$assetDir/dict") ?: emptyArray()
-            for (dictFile in dictFiles) {
-                val destDictFile = File(dictDir, dictFile)
-                if (!destDictFile.exists()) {
-                    context.assets.open("$assetDir/dict/$dictFile").use { input ->
-                        FileOutputStream(destDictFile).use { output ->
-                            input.copyTo(output)
-                        }
-                    }
                 }
             }
         } catch (e: Exception) {
