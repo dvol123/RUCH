@@ -36,11 +36,11 @@ class WhisperSTT(private val context: Context) {
         private const val DECODER_FILE = "decoder_model.onnx"
         private const val TOKENIZER_FILE = "tokenizer.json"
         
-        // Параметры Whisper base
+        // Параметры Whisper tiny
         private const val SAMPLE_RATE = 16000
         private const val N_MELS = 80
         private const val N_CTX = 1500
-        private const val D_MODEL = 512  // Whisper base hidden size
+        private const val D_MODEL = 384  // Whisper tiny hidden size
         private const val MAX_TOKENS = 448
         private const val VOCAB_SIZE = 51865
         
@@ -160,6 +160,9 @@ class WhisperSTT(private val context: Context) {
         if (!filesDir.exists()) filesDir.mkdirs()
         
         try {
+            // Очищаем старые модели для освобождения места
+            cleanOldModels(filesDir)
+            
             val folder = DocumentFile.fromTreeUri(context, folderUri)
             if (folder == null || !folder.exists()) {
                 Log.e(TAG, "Folder not found: $folderUri")
@@ -186,6 +189,17 @@ class WhisperSTT(private val context: Context) {
                 
                 val destFile = File(filesDir, fileName)
                 
+                // Пропускаем если файл уже существует и правильного размера
+                if (destFile.exists() && destFile.length() == source.length()) {
+                    Log.i(TAG, "Already exists: $fileName (${destFile.length() / 1024 / 1024} MB)")
+                    continue
+                }
+                
+                // Удаляем старый файл если есть
+                if (destFile.exists()) {
+                    destFile.delete()
+                }
+                
                 // Копируем через ContentResolver
                 try {
                     context.contentResolver.openInputStream(source.uri)?.use { input ->
@@ -204,6 +218,34 @@ class WhisperSTT(private val context: Context) {
         } catch (e: Exception) {
             Log.e(TAG, "Error copying from SAF URI", e)
             return null
+        }
+    }
+    
+    /**
+     * Удалить старые модели для освобождения места
+     */
+    private fun cleanOldModels(filesDir: File) {
+        val oldFiles = listOf(
+            "encoder_model_int8.onnx",
+            "decoder_model_int8.onnx"
+        )
+        
+        for (fileName in oldFiles) {
+            val file = File(filesDir, fileName)
+            if (file.exists()) {
+                val size = file.length() / 1024 / 1024
+                if (file.delete()) {
+                    Log.i(TAG, "Deleted old model: $fileName ($size MB)")
+                }
+            }
+        }
+        
+        // Также удаляем текущие модели если они есть (для чистой переустановки)
+        // Но только если они меньше ожидаемого размера (битые)
+        val encoderFile = File(filesDir, ENCODER_FILE)
+        if (encoderFile.exists() && encoderFile.length() < 30_000_000) {
+            encoderFile.delete()
+            Log.i(TAG, "Deleted incomplete encoder")
         }
     }
 
