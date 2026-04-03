@@ -62,7 +62,7 @@ class WhisperSTT(private val context: Context) {
             val config = createConfig(modelsDir.absolutePath)
             
             Log.d(TAG, "Creating OfflineRecognizer...")
-            recognizer = OfflineRecognizer(config)
+            recognizer = OfflineRecognizer(context.assets, config)
             
             isInitialized = recognizer != null
             Log.i(TAG, "Whisper STT initialized: $isInitialized")
