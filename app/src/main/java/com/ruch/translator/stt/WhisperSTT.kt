@@ -21,7 +21,7 @@ class WhisperSTT(private val context: Context) {
         private const val WHISPER_MODEL_DIR = "models/whisper"
         private const val ENCODER_FILE = "small-encoder.int8.onnx"
         private const val DECODER_FILE = "small-decoder.int8.onnx"
-        private const val TOKENS_FILE = "tokens.txt"
+        private const val TOKENS_FILE = "small-tokens.txt"
     }
 
     private var recognizer: OfflineRecognizer? = null
