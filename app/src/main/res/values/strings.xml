@@ -57,6 +57,7 @@
     <string name="missing_files">Отсутствуют</string>
     <string name="found_files">Найдены</string>
     <string name="continue_btn">Продолжить</string>
+    <string name="cancel">Отмена</string>
     <string name="menu_models_folder">Папка с моделями</string>
     
     <!-- About -->
