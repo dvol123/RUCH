@@ -85,12 +85,9 @@ dependencies {
     
     // ========== AI/ML Libraries ==========
     
-    // ONNX Runtime for Whisper STT (Maven Central - работает стабильно)
-    implementation("com.microsoft.onnxruntime:onnxruntime-android:1.17.0")
-    
-    // Sherpa-ONNX for TTS only (если нужен)
-    // Если AAR не работает, можно использовать Maven:
-    // implementation("com.k2fsa.sherpa:sherpa-onnx-android:1.10.15")
+    // ONNX Runtime for Whisper STT (прямой доступ, как RTranslator)
+    implementation("com.microsoft.onnxruntime:onnxruntime-android:1.19.0")
+    implementation("com.microsoft.onnxruntime:onnxruntime-extensions-android:0.12.4")
     
     // ========== Data & Networking ==========
     

@@ -14,7 +14,7 @@ import com.ruch.translator.data.Language
 import com.ruch.translator.data.PreferencesManager
 import com.ruch.translator.data.ProcessingState
 import com.ruch.translator.stt.WhisperSTT
-import com.ruch.translator.tts.SherpaTTSEngine
+import com.ruch.translator.tts.AndroidTTSEngine
 import com.ruch.translator.translation.NllbTranslator
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.launch
@@ -25,7 +25,7 @@ import kotlinx.coroutines.launch
  * Integrates:
  * - WhisperSTT for offline speech recognition
  * - NllbTranslator for offline machine translation
- * - SherpaTTSEngine for offline text-to-speech
+ * - AndroidTTSEngine for text-to-speech
  */
 class MainViewModel(application: Application) : AndroidViewModel(application) {
 
@@ -38,7 +38,7 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
     // AI Engines (Offline)
     private val whisperSTT = WhisperSTT(application)
     private val translator = NllbTranslator(application)
-    private val ttsEngine = SherpaTTSEngine(application)
+    private val ttsEngine = AndroidTTSEngine(application)
     
     // Audio components
     private val audioRecorder = AudioRecorder(application)
@@ -132,7 +132,7 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
                 var ttsReady = false
                 try {
                     ttsReady = ttsEngine.initialize()
-                    Log.i(TAG, "Sherpa TTS initialized: $ttsReady")
+                    Log.i(TAG, "Android TTS initialized: $ttsReady")
                 } catch (e: UnsatisfiedLinkError) {
                     Log.e(TAG, "Native library error for TTS: ${e.message}")
                 } catch (e: Exception) {
@@ -314,14 +314,15 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
                     _isSpeakingChinese.value = true
                 }
 
-                // Synthesize speech
+                // Synthesize speech using Android TTS
                 Log.i(TAG, "Synthesizing speech for: $text")
-                val result = ttsEngine.synthesize(text, language)
+                val audioData = ttsEngine.synthesizeToArray(text, language)
 
-                if (result != null && result.samples.isNotEmpty()) {
-                    Log.i(TAG, "Playing audio: ${result.samples.size} samples at ${result.sampleRate}Hz")
-                    // Play audio with correct sample rate
-                    playAudio(result.samples, result.sampleRate)
+                if (audioData != null && audioData.isNotEmpty()) {
+                    val sampleRate = ttsEngine.getSampleRate()
+                    Log.i(TAG, "Playing audio: ${audioData.size} samples at ${sampleRate}Hz")
+                    // Play audio
+                    playAudioShort(audioData, sampleRate)
                 } else {
                     _errorMessage.value = getApplication<Application>().getString(R.string.error_tts)
                 }
@@ -336,6 +337,51 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
                 _isSpeakingRussian.value = false
                 _isSpeakingChinese.value = false
             }
+        }
+    }
+
+    /**
+     * Play audio using AudioTrack (ShortArray from Android TTS)
+     */
+    private fun playAudioShort(audioData: ShortArray, sampleRate: Int) {
+        try {
+            Log.d(TAG, "playAudioShort: ${audioData.size} samples at $sampleRate Hz")
+
+            val bufferSize = AudioTrack.getMinBufferSize(
+                sampleRate,
+                AudioFormat.CHANNEL_OUT_MONO,
+                AudioFormat.ENCODING_PCM_16BIT
+            )
+
+            audioTrack = AudioTrack.Builder()
+                .setAudioAttributes(
+                    android.media.AudioAttributes.Builder()
+                        .setUsage(android.media.AudioAttributes.USAGE_MEDIA)
+                        .setContentType(android.media.AudioAttributes.CONTENT_TYPE_SPEECH)
+                        .build()
+                )
+                .setAudioFormat(
+                    AudioFormat.Builder()
+                        .setSampleRate(sampleRate)
+                        .setChannelMask(AudioFormat.CHANNEL_OUT_MONO)
+                        .setEncoding(AudioFormat.ENCODING_PCM_16BIT)
+                        .build()
+                )
+                .setBufferSizeInBytes(bufferSize.coerceAtLeast(audioData.size * 2))
+                .setTransferMode(AudioTrack.MODE_STREAM)
+                .build()
+
+            audioTrack?.play()
+            audioTrack?.write(audioData, 0, audioData.size)
+
+            // Wait for playback to complete
+            Thread.sleep(audioData.size * 1000L / sampleRate + 100)
+
+            audioTrack?.stop()
+            audioTrack?.release()
+            audioTrack = null
+        } catch (e: Exception) {
+            Log.e(TAG, "Audio playback error: ${e.message}", e)
         }
     }
 
