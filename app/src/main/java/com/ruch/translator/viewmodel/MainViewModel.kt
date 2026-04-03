@@ -188,17 +188,23 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
                 }
 
                 // Record audio using AudioRecorder
+                Log.d(TAG, "Starting audio recording...")
                 val audioData = audioRecorder.recordAudio(maxDurationSeconds = 15)
+                Log.d(TAG, "Audio recording finished, samples: ${audioData?.size ?: 0}")
 
                 _isRecordingRussian.value = false
                 _isRecordingChinese.value = false
                 _recordingLanguage.value = null
 
-                if (audioData != null && audioData.isNotEmpty()) {
+                // Check if we have enough audio data (at least 0.5 seconds)
+                val minSamples = 16000 * 0.5 // 0.5 seconds at 16kHz
+                if (audioData != null && audioData.size >= minSamples) {
                     _processingState.value = ProcessingState.TRANSCRIBING
 
                     // Transcribe with Whisper
+                    Log.d(TAG, "Starting transcription...")
                     val text = whisperSTT.transcribe(audioData, language)
+                    Log.d(TAG, "Transcription result: $text")
 
                     if (!text.isNullOrEmpty()) {
                         _processingState.value = ProcessingState.TRANSLATING
@@ -213,6 +219,8 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
                             _russianText.value = translated
                         }
                     }
+                } else {
+                    Log.w(TAG, "Audio too short or null, skipping transcription")
                 }
 
                 _processingState.value = ProcessingState.IDLE
@@ -228,7 +236,9 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
     }
 
     fun stopRecording() {
+        Log.d(TAG, "stopRecording called")
         audioRecorder.stopRecording()
+        // Don't cancel the job - let it finish naturally with partial audio
     }
 
     /**

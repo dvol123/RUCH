@@ -68,6 +68,8 @@ class AudioRecorder(private val context: Context) {
         val bufferSize = AudioRecord.getMinBufferSize(SAMPLE_RATE, CHANNEL, AUDIO_FORMAT)
             .coerceAtLeast(SAMPLE_RATE) // Минимум 1 секунда буфера
 
+        var audioBuffer = mutableListOf<Short>()
+        
         try {
             audioRecord = AudioRecord(
                 MediaRecorder.AudioSource.MIC,
@@ -84,9 +86,9 @@ class AudioRecorder(private val context: Context) {
 
             isRecording.set(true)
             _recordingState.value = RecordingState.Recording
+            Log.d(TAG, "Recording started")
 
             val maxSamples = SAMPLE_RATE * maxDurationSeconds
-            val audioBuffer = mutableListOf<Short>()
             val tempBuffer = ShortArray(bufferSize / 2)
 
             audioRecord?.startRecording()
@@ -99,9 +101,22 @@ class AudioRecorder(private val context: Context) {
                 if (!isActive) break
             }
 
-            audioRecord?.stop()
+            Log.d(TAG, "Recording finished, samples: ${audioBuffer.size}")
+            
+            // Always stop recording if still recording
+            try {
+                audioRecord?.stop()
+            } catch (e: Exception) {
+                Log.w(TAG, "Error stopping recorder: ${e.message}")
+            }
 
             // Конвертируем ShortArray в FloatArray для Whisper
+            if (audioBuffer.isEmpty()) {
+                Log.w(TAG, "No audio data recorded")
+                _recordingState.value = RecordingState.Idle
+                return@withContext null
+            }
+            
             val floatAudio = FloatArray(audioBuffer.size) { i ->
                 audioBuffer[i].toFloat() / Short.MAX_VALUE.toFloat()
             }
@@ -111,7 +126,15 @@ class AudioRecorder(private val context: Context) {
         } catch (e: Exception) {
             Log.e(TAG, "Recording error: ${e.message}", e)
             _recordingState.value = RecordingState.Error(e.message ?: "Ошибка записи")
-            null
+            // Return what we have so far if there's any data
+            if (audioBuffer.isNotEmpty()) {
+                Log.d(TAG, "Returning partial audio: ${audioBuffer.size} samples")
+                FloatArray(audioBuffer.size) { i ->
+                    audioBuffer[i].toFloat() / Short.MAX_VALUE.toFloat()
+                }
+            } else {
+                null
+            }
         } finally {
             isRecording.set(false)
             releaseRecorder()
@@ -122,8 +145,10 @@ class AudioRecorder(private val context: Context) {
      * Остановка записи
      */
     fun stopRecording() {
+        Log.d(TAG, "stopRecording called, isRecording=${isRecording.get()}")
         isRecording.set(false)
         _recordingState.value = RecordingState.Idle
+        // Don't release here - let recordAudio finish and release in finally block
     }
 
     /**
