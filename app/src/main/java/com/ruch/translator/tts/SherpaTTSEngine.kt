@@ -207,13 +207,21 @@ class SherpaTTSEngine(private val context: Context) {
     }
 
     /**
-     * Synthesize speech - returns FloatArray normalized to [-1, 1] at sample rate from model
+     * Result of TTS synthesis
+     */
+    data class SynthesisResult(
+        val samples: FloatArray,
+        val sampleRate: Int
+    )
+
+    /**
+     * Synthesize speech - returns SynthesisResult with samples and sample rate
      */
     suspend fun synthesize(
         text: String, 
         language: Language, 
         speed: Float = 1.0f
-    ): FloatArray? = withContext(Dispatchers.IO) {
+    ): SynthesisResult? = withContext(Dispatchers.IO) {
         if (text.isBlank()) return@withContext null
 
         val tts = when (language) {
@@ -233,7 +241,10 @@ class SherpaTTSEngine(private val context: Context) {
             
             if (audio != null && audio.samples != null && audio.samples.isNotEmpty()) {
                 Log.d(TAG, "Generated ${audio.samples.size} samples at ${audio.sampleRate}Hz")
-                audio.samples
+                SynthesisResult(
+                    samples = audio.samples,
+                    sampleRate = audio.sampleRate
+                )
             } else {
                 Log.e(TAG, "Empty result")
                 null

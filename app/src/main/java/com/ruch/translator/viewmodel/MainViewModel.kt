@@ -304,11 +304,13 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
                 }
 
                 // Synthesize speech
-                val audioData = ttsEngine.synthesize(text, language)
+                Log.i(TAG, "Synthesizing speech for: $text")
+                val result = ttsEngine.synthesize(text, language)
 
-                if (audioData != null && audioData.isNotEmpty()) {
-                    // Play audio
-                    playAudio(audioData)
+                if (result != null && result.samples.isNotEmpty()) {
+                    Log.i(TAG, "Playing audio: ${result.samples.size} samples at ${result.sampleRate}Hz")
+                    // Play audio with correct sample rate
+                    playAudio(result.samples, result.sampleRate)
                 } else {
                     _errorMessage.value = getApplication<Application>().getString(R.string.error_tts)
                 }
@@ -329,9 +331,9 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
     /**
      * Play audio using AudioTrack (FloatArray from Sherpa TTS)
      */
-    private fun playAudio(audioData: FloatArray) {
+    private fun playAudio(audioData: FloatArray, sampleRate: Int) {
         try {
-            val sampleRate = ttsEngine.getSampleRate(Language.RUSSIAN) // Get actual sample rate
+            Log.d(TAG, "playAudio: ${audioData.size} samples at $sampleRate Hz")
             
             // Convert FloatArray [-1, 1] to ShortArray [Short.MIN_VALUE, Short.MAX_VALUE]
             val shortData = ShortArray(audioData.size) { i ->
