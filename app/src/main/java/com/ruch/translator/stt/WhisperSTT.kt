@@ -85,7 +85,7 @@ class WhisperSTT(private val context: Context) {
                     decoder = "$modelDir/$DECODER_FILE",
                     language = "auto",
                     task = "transcribe",
-                    tailPaddings = 1000
+                    tailPaddings = 0  // Set to 0 to avoid crash with short audio
                 ),
                 tokens = "$modelDir/$TOKENS_FILE",
                 numThreads = 4,
@@ -129,41 +129,75 @@ class WhisperSTT(private val context: Context) {
             return@withContext null
         }
 
+        if (audioData.isEmpty()) {
+            Log.e(TAG, "Empty audio data")
+            return@withContext null
+        }
+
+        var stream: OfflineStream? = null
         try {
-            val stream = recognizer!!.createStream()
-            stream.acceptWaveform(audioData, 16000)
+            Log.d(TAG, "Transcribing ${audioData.size} samples (${audioData.size / 16000.0f}s)")
+            
+            // Whisper expects at least 30 seconds of audio (480000 samples at 16kHz)
+            // Pad with zeros if audio is shorter
+            val minSamples = 16000 * 30  // 30 seconds
+            val paddedAudio = if (audioData.size < minSamples) {
+                Log.d(TAG, "Padding audio from ${audioData.size} to $minSamples samples")
+                FloatArray(minSamples) { i -> if (i < audioData.size) audioData[i] else 0f }
+            } else {
+                audioData
+            }
+            
+            stream = recognizer!!.createStream()
+            stream.acceptWaveform(paddedAudio, 16000)
             recognizer!!.decode(stream)
             val result = recognizer!!.getResult(stream)
-            stream.release()
             
             val text = result.text.trim()
             Log.d(TAG, "Transcribed: $text")
             text.ifEmpty { null }
         } catch (e: Exception) {
-            Log.e(TAG, "Error: ${e.message}", e)
+            Log.e(TAG, "Transcribe error: ${e.message}", e)
             null
+        } catch (e: UnsatisfiedLinkError) {
+            Log.e(TAG, "Native error: ${e.message}", e)
+            null
+        } finally {
+            stream?.release()
         }
     }
 
     suspend fun transcribeFile(audioPath: String, language: Language): String? = withContext(Dispatchers.IO) {
         if (!isInitialized || recognizer == null) return@withContext null
 
+        var stream: OfflineStream? = null
         try {
-            val stream = recognizer!!.createStream()
+            stream = recognizer!!.createStream()
             val wave = WaveReader.readWave(audioPath)
-            if (wave != null) {
-                stream.acceptWaveform(wave.samples, wave.sampleRate)
+            if (wave != null && wave.samples.isNotEmpty()) {
+                // Pad with zeros if audio is shorter than 30 seconds
+                val minSamples = 16000 * 30
+                val paddedAudio = if (wave.samples.size < minSamples) {
+                    FloatArray(minSamples) { i -> if (i < wave.samples.size) wave.samples[i] else 0f }
+                } else {
+                    wave.samples
+                }
+                
+                stream.acceptWaveform(paddedAudio, wave.sampleRate)
                 recognizer!!.decode(stream)
                 val result = recognizer!!.getResult(stream)
-                stream.release()
                 result.text.trim().ifEmpty { null }
             } else {
-                stream.release()
                 null
             }
         } catch (e: Exception) {
             Log.e(TAG, "Error: ${e.message}", e)
             null
+        } catch (e: UnsatisfiedLinkError) {
+            Log.e(TAG, "Native error: ${e.message}", e)
+            null
+        } finally {
+            stream?.release()
         }
     }
 
