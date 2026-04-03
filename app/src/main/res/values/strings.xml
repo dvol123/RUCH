@@ -45,6 +45,20 @@
     <string name="model_ready">Модели готовы</string>
     <string name="model_error">Ошибка загрузки моделей</string>
     
+    <!-- Model folder selection -->
+    <string name="select_models_folder_title">Выберите папку с моделями</string>
+    <string name="select_models_folder_message">Для работы распознавания речи необходимо выбрать папку с моделями Whisper.\n\nМодели должны содержать файлы:\n• encoder_model_int8.onnx (92 MB)\n• decoder_model_int8.onnx (156 MB)\n• tokenizer.json (2.5 MB)\n\nСкачайте модели и поместите в папку на телефоне.</string>
+    <string name="select_folder">Выбрать папку</string>
+    <string name="select_another">Выбрать другую</string>
+    <string name="models_found_title">Модели найдены</string>
+    <string name="models_found_message">Все необходимые файлы найдены:</string>
+    <string name="models_incomplete_title">Модели неполные</string>
+    <string name="models_incomplete_message">В выбранной папке не хватает файлов:</string>
+    <string name="missing_files">Отсутствуют</string>
+    <string name="found_files">Найдены</string>
+    <string name="continue_btn">Продолжить</string>
+    <string name="menu_models_folder">Папка с моделями</string>
+    
     <!-- About -->
     <string name="about_version">Версия: %s</string>
     <string name="about_description">Офлайн голосовой переводчик\nРусский ↔ 中文</string>

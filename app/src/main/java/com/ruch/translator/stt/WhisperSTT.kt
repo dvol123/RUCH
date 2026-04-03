@@ -4,14 +4,17 @@ import ai.onnxruntime.OnnxTensor
 import ai.onnxruntime.OrtEnvironment
 import ai.onnxruntime.OrtSession
 import android.content.Context
+import android.net.Uri
 import android.os.Environment
 import android.util.Log
+import androidx.documentfile.provider.DocumentFile
 import com.ruch.translator.audio.MelSpectrogram
 import com.ruch.translator.data.Language
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 import org.json.JSONObject
 import java.io.File
+import java.io.FileOutputStream
 import java.nio.FloatBuffer
 import java.nio.LongBuffer
 
@@ -67,7 +70,145 @@ class WhisperSTT(private val context: Context) {
     private var melSpectrogram: MelSpectrogram? = null
 
     /**
-     * Инициализация STT
+     * Инициализация STT с URI папки (SAF)
+     */
+    suspend fun initializeWithUri(folderUri: Uri): Boolean = withContext(Dispatchers.IO) {
+        if (isInitialized) return@withContext true
+
+        try {
+            Log.i(TAG, "=== Initializing Whisper STT with URI: $folderUri ===")
+            
+            // Копируем модели из SAF URI в filesDir
+            val modelsDir = copyModelsFromSafUri(folderUri)
+            if (modelsDir == null) {
+                Log.e(TAG, "Failed to copy models from URI")
+                return@withContext false
+            }
+            
+            // Проверяем файлы
+            val encoderFile = File(modelsDir, ENCODER_FILE)
+            val decoderFile = File(modelsDir, DECODER_FILE)
+            val tokenizerFile = File(modelsDir, TOKENIZER_FILE)
+            
+            if (!encoderFile.exists()) {
+                Log.e(TAG, "Encoder not found: ${encoderFile.absolutePath}")
+                return@withContext false
+            }
+            if (!decoderFile.exists()) {
+                Log.e(TAG, "Decoder not found: ${decoderFile.absolutePath}")
+                return@withContext false
+            }
+            if (!tokenizerFile.exists()) {
+                Log.e(TAG, "Tokenizer not found: ${tokenizerFile.absolutePath}")
+                return@withContext false
+            }
+            
+            Log.i(TAG, "Models found:")
+            Log.i(TAG, "  Encoder: ${encoderFile.length() / 1024 / 1024} MB")
+            Log.i(TAG, "  Decoder: ${decoderFile.length() / 1024 / 1024} MB")
+            Log.i(TAG, "  Tokenizer: ${tokenizerFile.length() / 1024} KB")
+            
+            // Загружаем токенизатор
+            loadTokenizer(tokenizerFile)
+            Log.i(TAG, "Tokenizer loaded, vocab size: ${vocab.size}")
+            
+            // Инициализируем Mel Spectrogram
+            melSpectrogram = MelSpectrogram(
+                sampleRate = SAMPLE_RATE,
+                nMels = N_MELS,
+                nFft = 400,
+                hopLength = 160
+            )
+            Log.i(TAG, "Mel Spectrogram initialized")
+            
+            // Создаём ONNX Environment
+            ortEnv = OrtEnvironment.getEnvironment()
+            
+            // Загружаем сессии
+            val options = OrtSession.SessionOptions().apply {
+                setIntraOpNumThreads(2)
+                setInterOpNumThreads(1)
+            }
+            
+            Log.i(TAG, "Loading encoder session...")
+            encoderSession = ortEnv?.createSession(encoderFile.absolutePath, options)
+            
+            Log.i(TAG, "Loading decoder session...")
+            decoderSession = ortEnv?.createSession(decoderFile.absolutePath, options)
+            
+            if (encoderSession == null || decoderSession == null) {
+                Log.e(TAG, "Failed to create ONNX sessions")
+                return@withContext false
+            }
+            
+            logModelInfo()
+            
+            isInitialized = true
+            Log.i(TAG, "=== Whisper STT initialized successfully ===")
+            true
+        } catch (e: Exception) {
+            Log.e(TAG, "Initialization failed", e)
+            false
+        }
+    }
+
+    /**
+     * Копировать модели из SAF URI в filesDir
+     */
+    private fun copyModelsFromSafUri(folderUri: Uri): File? {
+        val filesDir = File(context.filesDir, "whisper")
+        if (!filesDir.exists()) filesDir.mkdirs()
+        
+        try {
+            val folder = DocumentFile.fromTreeUri(context, folderUri)
+            if (folder == null || !folder.exists()) {
+                Log.e(TAG, "Folder not found: $folderUri")
+                return null
+            }
+            
+            // Ищем подпапку whisper или используем саму папку
+            var whisperFolder = folder.findFile("whisper")
+            if (whisperFolder == null || !whisperFolder.isDirectory) {
+                whisperFolder = folder
+            }
+            
+            // Копируем файлы
+            val files = listOf(ENCODER_FILE, DECODER_FILE, TOKENIZER_FILE)
+            var allCopied = true
+            
+            for (fileName in files) {
+                val source = whisperFolder.findFile(fileName)
+                if (source == null || !source.exists()) {
+                    Log.e(TAG, "Source file not found: $fileName")
+                    allCopied = false
+                    continue
+                }
+                
+                val destFile = File(filesDir, fileName)
+                
+                // Копируем через ContentResolver
+                try {
+                    context.contentResolver.openInputStream(source.uri)?.use { input ->
+                        FileOutputStream(destFile).use { output ->
+                            input.copyTo(output)
+                        }
+                    }
+                    Log.i(TAG, "Copied: $fileName (${destFile.length() / 1024 / 1024} MB)")
+                } catch (e: Exception) {
+                    Log.e(TAG, "Failed to copy $fileName", e)
+                    allCopied = false
+                }
+            }
+            
+            return if (allCopied) filesDir else null
+        } catch (e: Exception) {
+            Log.e(TAG, "Error copying from SAF URI", e)
+            return null
+        }
+    }
+
+    /**
+     * Инициализация STT (старый метод для обратной совместимости)
      * Загружает модели из filesDir или копирует из Download
      */
     suspend fun initialize(): Boolean = withContext(Dispatchers.IO) {

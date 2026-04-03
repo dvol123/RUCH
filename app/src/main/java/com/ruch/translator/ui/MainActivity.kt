@@ -2,7 +2,9 @@ package com.ruch.translator.ui
 
 import android.Manifest
 import android.content.pm.PackageManager
+import android.net.Uri
 import android.os.Bundle
+import android.util.Log
 import android.view.View
 import android.view.inputmethod.InputMethodManager
 import android.widget.EditText
@@ -16,10 +18,13 @@ import androidx.core.content.ContextCompat
 import androidx.core.view.ViewCompat
 import androidx.core.view.WindowCompat
 import androidx.core.view.WindowInsetsCompat
+import androidx.documentfile.provider.DocumentFile
+import androidx.lifecycle.lifecycleScope
 import com.google.android.material.dialog.MaterialAlertDialogBuilder
 import com.google.android.material.textfield.TextInputEditText
 import com.ruch.translator.BuildConfig
 import com.ruch.translator.data.Language
+import com.ruch.translator.data.PreferencesManager
 import com.ruch.translator.data.ProcessingState
 import com.ruch.translator.R
 import com.ruch.translator.databinding.ActivityMainBinding
@@ -31,8 +36,18 @@ import kotlinx.coroutines.launch
 
 class MainActivity : AppCompatActivity() {
     
+    companion object {
+        private const val TAG = "MainActivity"
+        private val REQUIRED_MODEL_FILES = listOf(
+            "encoder_model_int8.onnx",
+            "decoder_model_int8.onnx",
+            "tokenizer.json"
+        )
+    }
+    
     private lateinit var binding: ActivityMainBinding
     private val viewModel: MainViewModel by viewModels()
+    private lateinit var preferencesManager: PreferencesManager
     
     private val requestPermissionLauncher = registerForActivityResult(
         ActivityResultContracts.RequestPermission()
@@ -42,9 +57,18 @@ class MainActivity : AppCompatActivity() {
         }
     }
     
+    // SAF picker для выбора папки с моделями
+    private val folderPickerLauncher = registerForActivityResult(
+        ActivityResultContracts.OpenDocumentTree()
+    ) { uri: Uri? ->
+        uri?.let { handleSelectedFolder(it) }
+    }
+    
     override fun onCreate(savedInstanceState: Bundle?) {
         WindowCompat.setDecorFitsSystemWindows(window, false)
         super.onCreate(savedInstanceState)
+        
+        preferencesManager = PreferencesManager(this)
         
         binding = ActivityMainBinding.inflate(layoutInflater)
         setContentView(binding.root)
@@ -55,8 +79,141 @@ class MainActivity : AppCompatActivity() {
         setupTextWatchers()
         observeViewModel()
         
-        // Check if models are ready
-        checkModelsStatus()
+        // Проверяем, выбрана ли папка с моделями
+        checkModelsFolder()
+    }
+    
+    /**
+     * Проверка папки с моделями при запуске
+     */
+    private fun checkModelsFolder() {
+        val savedUri = preferencesManager.getModelsFolderUri()
+        
+        if (savedUri != null) {
+            // Папка уже выбрана - проверяем валидность
+            try {
+                val uri = Uri.parse(savedUri)
+                validateAndShowResult(uri)
+            } catch (e: Exception) {
+                Log.e(TAG, "Invalid saved URI", e)
+                showSelectFolderDialog()
+            }
+        } else {
+            // Папка не выбрана - показываем диалог
+            showSelectFolderDialog()
+        }
+    }
+    
+    /**
+     * Показать диалог выбора папки
+     */
+    private fun showSelectFolderDialog() {
+        MaterialAlertDialogBuilder(this)
+            .setTitle(R.string.select_models_folder_title)
+            .setMessage(R.string.select_models_folder_message)
+            .setPositiveButton(R.string.select_folder) { _, _ ->
+                folderPickerLauncher.launch(null)
+            }
+            .setCancelable(false)
+            .show()
+    }
+    
+    /**
+     * Обработка выбранной папки
+     */
+    private fun handleSelectedFolder(uri: Uri) {
+        Log.i(TAG, "Selected folder: $uri")
+        validateAndShowResult(uri)
+    }
+    
+    /**
+     * Проверить папку и показать результат
+     */
+    private fun validateAndShowResult(folderUri: Uri) {
+        val (missingFiles, foundFiles) = validateFolder(folderUri)
+        
+        if (missingFiles.isEmpty()) {
+            // Все файлы найдены
+            val message = buildString {
+                append(getString(R.string.models_found_message))
+                append("\n\n")
+                foundFiles.forEach { append("✓ $it\n") }
+            }
+            
+            MaterialAlertDialogBuilder(this)
+                .setTitle(R.string.models_found_title)
+                .setMessage(message)
+                .setPositiveButton(R.string.continue_btn) { _, _ ->
+                    lifecycleScope.launch {
+                        preferencesManager.setModelsFolderUri(folderUri.toString())
+                        // Инициализируем движки с выбранной папкой
+                        viewModel.initializeWithFolder(folderUri)
+                    }
+                }
+                .setCancelable(false)
+                .show()
+        } else {
+            // Не все файлы найдены
+            val message = buildString {
+                append(getString(R.string.models_incomplete_message))
+                append("\n\n")
+                append(getString(R.string.missing_files))
+                append(":\n")
+                missingFiles.forEach { append("✗ $it\n") }
+                append("\n")
+                if (foundFiles.isNotEmpty()) {
+                    append(getString(R.string.found_files))
+                    append(":\n")
+                    foundFiles.forEach { append("✓ $it\n") }
+                }
+            }
+            
+            MaterialAlertDialogBuilder(this)
+                .setTitle(R.string.models_incomplete_title)
+                .setMessage(message)
+                .setPositiveButton(R.string.select_another) { _, _ ->
+                    folderPickerLauncher.launch(null)
+                }
+                .setNegativeButton(R.string.cancel, null)
+                .show()
+        }
+    }
+    
+    /**
+     * Проверить папку на наличие нужных файлов
+     */
+    private fun validateFolder(folderUri: Uri): Pair<List<String>, List<String>> {
+        val missingFiles = mutableListOf<String>()
+        val foundFiles = mutableListOf<String>()
+        
+        try {
+            val folder = DocumentFile.fromTreeUri(this, folderUri)
+            if (folder == null || !folder.exists()) {
+                return Pair(REQUIRED_MODEL_FILES, emptyList())
+            }
+            
+            // Ищем подпапку whisper или проверяем саму папку
+            var whisperFolder = folder.findFile("whisper")
+            if (whisperFolder == null || !whisperFolder.isDirectory) {
+                whisperFolder = folder
+            }
+            
+            for (fileName in REQUIRED_MODEL_FILES) {
+                val file = whisperFolder.findFile(fileName)
+                if (file != null && file.exists()) {
+                    foundFiles.add(fileName)
+                    Log.d(TAG, "Found: $fileName (${file.length()} bytes)")
+                } else {
+                    missingFiles.add(fileName)
+                    Log.d(TAG, "Missing: $fileName")
+                }
+            }
+        } catch (e: Exception) {
+            Log.e(TAG, "Error validating folder", e)
+            return Pair(REQUIRED_MODEL_FILES, emptyList())
+        }
+        
+        return Pair(missingFiles, foundFiles)
     }
     
     private fun setupWindowInsets() {
@@ -369,21 +526,19 @@ class MainActivity : AppCompatActivity() {
         }
     }
     
-    private fun checkModelsStatus() {
-        // Models are bundled in APK assets, no need to download
-        // Just observe initialization status
-        viewModel.modelsReady.observe(this) { ready ->
-            // Models are ready when engines initialize successfully
-            // No download dialog needed - models are bundled in APK
-        }
-    }
-    
     private fun showPermissionDeniedDialog() {
         MaterialAlertDialogBuilder(this)
             .setTitle(R.string.permission_required)
             .setMessage("Для работы голосового ввода требуется разрешение на запись аудио.")
             .setPositiveButton(android.R.string.ok, null)
             .show()
+    }
+    
+    /**
+     * Добавить пункт меню для смены папки с моделями
+     */
+    private fun showChangeModelsFolder() {
+        folderPickerLauncher.launch(null)
     }
     
     @Deprecated("Deprecated in Java")

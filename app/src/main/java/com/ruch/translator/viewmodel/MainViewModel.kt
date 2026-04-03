@@ -3,6 +3,7 @@ package com.ruch.translator.viewmodel
 import android.app.Application
 import android.media.AudioFormat
 import android.media.AudioTrack
+import android.net.Uri
 import android.util.Log
 import androidx.lifecycle.AndroidViewModel
 import androidx.lifecycle.LiveData
@@ -36,7 +37,7 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
     private val preferencesManager = PreferencesManager(application)
 
     // AI Engines (Offline)
-    private val whisperSTT = WhisperSTT(application)
+    private var whisperSTT: WhisperSTT? = null
     private val translator = NllbTranslator(application)
     private val ttsEngine = AndroidTTSEngine(application)
     
@@ -95,23 +96,25 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
         _processingState.value = ProcessingState.IDLE
         _isInitializing.value = true
         _modelsReady.value = false
-        initializeEngines()
+        // Не инициализируем движки автоматически - ждём выбора папки
     }
 
     /**
-     * Initialize all AI engines
+     * Инициализация с выбранной папкой моделей
      */
-    private fun initializeEngines() {
+    fun initializeWithFolder(folderUri: Uri) {
         viewModelScope.launch {
             try {
-                _engineStatus.value = getApplication<Application>().getString(R.string.model_downloading)
+                _isInitializing.value = true
+                _engineStatus.value = "Загрузка моделей..."
                 
-                Log.i(TAG, "=== Starting engine initialization ===")
+                Log.i(TAG, "=== Starting engine initialization with folder: $folderUri ===")
                 
-                // Initialize Whisper STT
+                // Initialize Whisper STT with folder URI
+                whisperSTT = WhisperSTT(getApplication())
                 var sttReady = false
                 try {
-                    sttReady = whisperSTT.initialize()
+                    sttReady = whisperSTT?.initializeWithUri(folderUri) ?: false
                     Log.i(TAG, "Whisper STT initialized: $sttReady")
                 } catch (e: UnsatisfiedLinkError) {
                     Log.e(TAG, "Native library error for STT: ${e.message}")
@@ -150,23 +153,15 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
                 }
                 _engineStatus.value = status
                 
+                // Сохраняем что модели загружены
+                preferencesManager.setModelsLoaded(allReady)
+                
                 Log.i(TAG, "=== All engines initialized. Ready: $allReady ===")
             } catch (e: Exception) {
                 Log.e(TAG, "Engine initialization error: ${e.message}", e)
                 _isInitializing.value = false
-                _errorMessage.value = "Initialization error: ${e.message}"
-            } catch (e: UnsatisfiedLinkError) {
-                Log.e(TAG, "Native library error: ${e.message}", e)
-                _isInitializing.value = false
-                _errorMessage.value = "Native library error: ${e.message}"
+                _errorMessage.value = "Ошибка инициализации: ${e.message}"
             }
-        }
-    }
-
-    fun onModelsDownloaded() {
-        _modelsReady.value = true
-        viewModelScope.launch {
-            preferencesManager.setModelsDownloaded(true)
         }
     }
 
@@ -214,7 +209,7 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
                         android.widget.Toast.LENGTH_SHORT
                     ).show()
                     
-                    val text = whisperSTT.transcribe(audioData, language)
+                    val text = whisperSTT?.transcribe(audioData, language)
                     Log.i(TAG, "=== Transcription result: $text ===")
 
                     if (!text.isNullOrEmpty()) {
@@ -461,7 +456,7 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
 
     override fun onCleared() {
         super.onCleared()
-        whisperSTT.release()
+        whisperSTT?.release()
         translator.release()
         ttsEngine.release()
         audioRecorder.release()
