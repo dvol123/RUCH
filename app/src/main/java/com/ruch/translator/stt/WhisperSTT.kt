@@ -31,16 +31,16 @@ class WhisperSTT(private val context: Context) {
     companion object {
         private const val TAG = "WhisperSTT"
         
-        // Имена файлов моделей (реальные с HuggingFace)
-        private const val ENCODER_FILE = "encoder_model_int8.onnx"
-        private const val DECODER_FILE = "decoder_model_int8.onnx"
+        // Имена файлов моделей (FP32 с HuggingFace onnx-community)
+        private const val ENCODER_FILE = "encoder_model.onnx"
+        private const val DECODER_FILE = "decoder_model.onnx"
         private const val TOKENIZER_FILE = "tokenizer.json"
         
-        // Параметры Whisper small
+        // Параметры Whisper base
         private const val SAMPLE_RATE = 16000
         private const val N_MELS = 80
         private const val N_CTX = 1500
-        private const val D_MODEL = 768  // Whisper small hidden size
+        private const val D_MODEL = 512  // Whisper base hidden size
         private const val MAX_TOKENS = 448
         private const val VOCAB_SIZE = 51865
         
@@ -317,8 +317,8 @@ class WhisperSTT(private val context: Context) {
         if (!downloadDir.exists()) {
             Log.e(TAG, "Download directory not found: ${downloadDir.absolutePath}")
             Log.e(TAG, "Please create folder and place models:")
-            Log.e(TAG, "  /sdcard/Download/ruch_models/whisper/encoder_model_int8.onnx")
-            Log.e(TAG, "  /sdcard/Download/ruch_models/whisper/decoder_model_int8.onnx")
+            Log.e(TAG, "  /sdcard/Download/ruch_models/whisper/encoder_model.onnx")
+            Log.e(TAG, "  /sdcard/Download/ruch_models/whisper/decoder_model.onnx")
             Log.e(TAG, "  /sdcard/Download/ruch_models/whisper/tokenizer.json")
             return null
         }

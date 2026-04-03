@@ -39,8 +39,8 @@ class MainActivity : AppCompatActivity() {
     companion object {
         private const val TAG = "MainActivity"
         private val REQUIRED_MODEL_FILES = listOf(
-            "encoder_model_int8.onnx",
-            "decoder_model_int8.onnx",
+            "encoder_model.onnx",
+            "decoder_model.onnx",
             "tokenizer.json"
         )
     }
