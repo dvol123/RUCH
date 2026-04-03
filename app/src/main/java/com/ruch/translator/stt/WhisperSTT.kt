@@ -16,11 +16,12 @@ class WhisperSTT(private val context: Context) {
 
     companion object {
         private const val TAG = "WhisperSTT"
-        
+
         private const val WHISPER_MODEL_DIR = "models/whisper"
-        private const val ENCODER_FILE = "small-encoder.int8.onnx"
-        private const val DECODER_FILE = "small-decoder.int8.onnx"
-        private const val TOKENS_FILE = "small-tokens.txt"
+        // Файлы из sherpa-onnx-whisper-small.tar.bz2
+        private const val ENCODER_FILE = "encoder-epoch-99-int8.onnx"
+        private const val DECODER_FILE = "decoder-epoch-99-int8.onnx"
+        private const val TOKENS_FILE = "tokens.txt"
     }
 
     private var recognizer: OfflineRecognizer? = null
