@@ -97,7 +97,8 @@ class SherpaTTSEngine(private val context: Context) {
             )
 
             Log.d(TAG, "Creating Russian OfflineTts...")
-            russianTts = OfflineTts(context.assets, config)
+            // Use null for assetManager since we're using file paths, not assets
+            russianTts = OfflineTts(null, config)
             Log.i(TAG, "Russian TTS initialized successfully")
             true
         } catch (e: Exception) {
@@ -169,7 +170,8 @@ class SherpaTTSEngine(private val context: Context) {
             )
 
             Log.d(TAG, "Creating Chinese OfflineTts...")
-            chineseTts = OfflineTts(context.assets, config)
+            // Use null for assetManager since we're using file paths, not assets
+            chineseTts = OfflineTts(null, config)
             Log.i(TAG, "Chinese TTS initialized successfully")
             true
         } catch (e: Exception) {

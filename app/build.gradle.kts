@@ -58,13 +58,6 @@ android {
             useLegacyPackaging = true
         }
     }
-    
-    // Include native libraries from jniLibs
-    sourceSets {
-        getByName("main") {
-            jniLibs.srcDirs("src/main/jniLibs")
-        }
-    }
 
     // Don't compress models
     androidResources {
