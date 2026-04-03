@@ -250,7 +250,7 @@ class SherpaTTSEngine(private val context: Context) {
             Language.RUSSIAN -> russianTts
             Language.CHINESE -> chineseTts
         }
-        return tts?.sampleRate ?: 22050
+        return tts?.sampleRate() ?: 22050
     }
 
     fun isReady(language: Language): Boolean {
