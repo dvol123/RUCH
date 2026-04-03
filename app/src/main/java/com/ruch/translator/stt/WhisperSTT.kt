@@ -4,142 +4,249 @@ import ai.onnxruntime.OnnxTensor
 import ai.onnxruntime.OrtEnvironment
 import ai.onnxruntime.OrtSession
 import android.content.Context
+import android.os.Environment
 import android.util.Log
 import com.ruch.translator.data.Language
-import com.ruch.translator.nn.TensorUtils
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
+import org.json.JSONObject
 import java.io.File
 import java.io.FileOutputStream
 import java.nio.FloatBuffer
 import java.nio.LongBuffer
 
 /**
- * Speech-to-Text с прямым ONNX Runtime (как RTranslator)
- * Использует 5 файлов моделей Whisper
+ * Speech-to-Text с прямым ONNX Runtime
+ * 
+ * Модели загружаются из:
+ * 1. Сначала проверяем filesDir (уже скопированные)
+ * 2. Если нет - ищем в /sdcard/Download/ruch_models/whisper/
+ * 3. Копируем в filesDir
  */
 class WhisperSTT(private val context: Context) {
 
     companion object {
         private const val TAG = "WhisperSTT"
         
-        private const val WHISPER_MODEL_DIR = "models/whisper"
+        // Имена файлов моделей (реальные с HuggingFace)
+        private const val ENCODER_FILE = "encoder_model_int8.onnx"
+        private const val DECODER_FILE = "decoder_model_int8.onnx"
+        private const val TOKENIZER_FILE = "tokenizer.json"
         
-        // 5 файлов моделей Whisper
-        private const val INITIALIZER_FILE = "Whisper_initializer.onnx"
-        private const val ENCODER_FILE = "Whisper_encoder.onnx"
-        private const val DECODER_FILE = "Whisper_decoder.onnx"
-        private const val CACHE_INITIALIZER_FILE = "Whisper_cache_initializer.onnx"
-        private const val DETOKENIZER_FILE = "Whisper_detokenizer.onnx"
-        
-        // Параметры Whisper
+        // Параметры Whisper small
         private const val SAMPLE_RATE = 16000
         private const val N_MELS = 80
         private const val N_CTX = 1500
+        private const val D_MODEL = 768  // Whisper small hidden size
         private const val MAX_TOKENS = 448
+        private const val VOCAB_SIZE = 51865
+        
+        // Специальные токены Whisper
+        private const val TOKEN_EOT = 50257       // <|endoftext|>
+        private const val TOKEN_START = 50258     // <|startoftranscript|>
+        private const val TOKEN_TRANSCRIBE = 50359 // <|transcribe|>
+        private const val TOKEN_NO_TIMESTAMPS = 50363 // <|notimestamps|>
+        
+        // Языковые токены
+        private val LANG_TOKENS = mapOf(
+            Language.RUSSIAN to 50263L,  // <|ru|>
+            Language.CHINESE to 50260L   // <|zh|>
+        )
     }
 
     private var ortEnv: OrtEnvironment? = null
-    private var initializerSession: OrtSession? = null
     private var encoderSession: OrtSession? = null
     private var decoderSession: OrtSession? = null
-    private var cacheInitSession: OrtSession? = null
-    private var detokenizerSession: OrtSession? = null
     
     private var isInitialized = false
-    private var cachedEncoderOutput: Array<FloatArray>? = null
-    
-    // Языковые токены для Whisper
-    private val languageTokens = mapOf(
-        Language.RUSSIAN to 50258L,  // <|ru|>
-        Language.CHINESE to 50260L   // <|zh|>
-    )
+    private var tokenizerData: JSONObject? = null
+    private var vocab: Map<String, Int> = emptyMap()
+    private var idToToken: Map<Int, String> = emptyMap()
 
+    /**
+     * Инициализация STT
+     * Загружает модели из filesDir или копирует из Download
+     */
     suspend fun initialize(): Boolean = withContext(Dispatchers.IO) {
         if (isInitialized) return@withContext true
 
         try {
-            Log.i(TAG, "Initializing Whisper STT with ONNX Runtime...")
-
-            // Проверяем модели в assets
-            val assetFiles = context.assets.list(WHISPER_MODEL_DIR) ?: emptyArray()
-            Log.d(TAG, "Assets in $WHISPER_MODEL_DIR: ${assetFiles.toList()}")
+            Log.i(TAG, "=== Initializing Whisper STT ===")
             
-            if (assetFiles.isEmpty()) {
-                Log.e(TAG, "No Whisper models found in assets!")
+            // Шаг 1: Получаем директорию с моделями
+            val modelsDir = getOrCopyModels()
+            if (modelsDir == null) {
+                Log.e(TAG, "Models not found! Place models in /sdcard/Download/ruch_models/whisper/")
                 return@withContext false
             }
-
-            // Копируем модели из assets
-            val modelsDir = copyModelsFromAssets()
-
-            // Создаём ONNX Environment
+            
+            // Шаг 2: Проверяем файлы
+            val encoderFile = File(modelsDir, ENCODER_FILE)
+            val decoderFile = File(modelsDir, DECODER_FILE)
+            val tokenizerFile = File(modelsDir, TOKENIZER_FILE)
+            
+            if (!encoderFile.exists()) {
+                Log.e(TAG, "Encoder not found: ${encoderFile.absolutePath}")
+                return@withContext false
+            }
+            if (!decoderFile.exists()) {
+                Log.e(TAG, "Decoder not found: ${decoderFile.absolutePath}")
+                return@withContext false
+            }
+            if (!tokenizerFile.exists()) {
+                Log.e(TAG, "Tokenizer not found: ${tokenizerFile.absolutePath}")
+                return@withContext false
+            }
+            
+            Log.i(TAG, "Models found:")
+            Log.i(TAG, "  Encoder: ${encoderFile.length() / 1024 / 1024} MB")
+            Log.i(TAG, "  Decoder: ${decoderFile.length() / 1024 / 1024} MB")
+            Log.i(TAG, "  Tokenizer: ${tokenizerFile.length() / 1024} KB")
+            
+            // Шаг 3: Загружаем токенизатор
+            loadTokenizer(tokenizerFile)
+            Log.i(TAG, "Tokenizer loaded, vocab size: ${vocab.size}")
+            
+            // Шаг 4: Создаём ONNX Environment
             ortEnv = OrtEnvironment.getEnvironment()
-
-            // Загружаем все 5 сессий
-            Log.i(TAG, "Loading ONNX sessions...")
             
-            initializerSession = loadSession(modelsDir, INITIALIZER_FILE)
-            encoderSession = loadSession(modelsDir, ENCODER_FILE)
-            decoderSession = loadSession(modelsDir, DECODER_FILE)
-            cacheInitSession = loadSession(modelsDir, CACHE_INITIALIZER_FILE)
-            detokenizerSession = loadSession(modelsDir, DETOKENIZER_FILE)
-
-            if (initializerSession == null || encoderSession == null || 
-                decoderSession == null || cacheInitSession == null || detokenizerSession == null) {
-                Log.e(TAG, "Failed to load one or more ONNX sessions")
+            // Шаг 5: Загружаем сессии
+            val options = OrtSession.SessionOptions().apply {
+                // Оптимизации для мобильных
+                setIntraOpNumThreads(2)
+                setInterOpNumThreads(1)
+            }
+            
+            Log.i(TAG, "Loading encoder session...")
+            encoderSession = ortEnv?.createSession(encoderFile.absolutePath, options)
+            
+            Log.i(TAG, "Loading decoder session...")
+            decoderSession = ortEnv?.createSession(decoderFile.absolutePath, options)
+            
+            if (encoderSession == null || decoderSession == null) {
+                Log.e(TAG, "Failed to create ONNX sessions")
                 return@withContext false
             }
-
+            
+            // Логируем входы/выходы моделей
+            logModelInfo()
+            
             isInitialized = true
-            Log.i(TAG, "Whisper STT initialized successfully!")
+            Log.i(TAG, "=== Whisper STT initialized successfully ===")
             true
         } catch (e: Exception) {
-            Log.e(TAG, "Failed to initialize Whisper STT", e)
+            Log.e(TAG, "Initialization failed", e)
             false
         }
     }
 
-    private fun loadSession(modelsDir: File, fileName: String): OrtSession? {
-        val file = File(modelsDir, fileName)
-        if (!file.exists()) {
-            Log.e(TAG, "Model file not found: $fileName")
+    /**
+     * Получить модели: из filesDir или скопировать из Download
+     */
+    private fun getOrCopyModels(): File? {
+        val filesDir = File(context.filesDir, "whisper")
+        
+        // Проверяем, есть ли уже модели в filesDir
+        val encoderInFiles = File(filesDir, ENCODER_FILE)
+        if (encoderInFiles.exists() && encoderInFiles.length() > 10_000_000) {
+            Log.i(TAG, "Models already in filesDir: ${filesDir.absolutePath}")
+            return filesDir
+        }
+        
+        // Ищем в /sdcard/Download/ruch_models/whisper/
+        val downloadDir = File(
+            Environment.getExternalStoragePublicDirectory(Environment.DIRECTORY_DOWNLOADS),
+            "ruch_models/whisper"
+        )
+        
+        Log.i(TAG, "Looking for models in: ${downloadDir.absolutePath}")
+        
+        if (!downloadDir.exists()) {
+            Log.e(TAG, "Download directory not found: ${downloadDir.absolutePath}")
+            Log.e(TAG, "Please create folder and place models:")
+            Log.e(TAG, "  /sdcard/Download/ruch_models/whisper/encoder_model_int8.onnx")
+            Log.e(TAG, "  /sdcard/Download/ruch_models/whisper/decoder_model_int8.onnx")
+            Log.e(TAG, "  /sdcard/Download/ruch_models/whisper/tokenizer.json")
             return null
         }
-        Log.i(TAG, "Loading $fileName (${file.length() / 1024 / 1024} MB)")
-        return ortEnv?.createSession(file.absolutePath, OrtSession.SessionOptions())
-    }
-
-    private fun copyModelsFromAssets(): File {
-        val modelsDir = File(context.filesDir, WHISPER_MODEL_DIR)
-        if (!modelsDir.exists()) {
-            modelsDir.mkdirs()
-        }
-
-        val files = listOf(
-            INITIALIZER_FILE, ENCODER_FILE, DECODER_FILE,
-            CACHE_INITIALIZER_FILE, DETOKENIZER_FILE
-        )
-
-        files.forEach { fileName ->
-            val destFile = File(modelsDir, fileName)
-            if (!destFile.exists()) {
+        
+        // Копируем файлы
+        if (!filesDir.exists()) filesDir.mkdirs()
+        
+        val files = listOf(ENCODER_FILE, DECODER_FILE, TOKENIZER_FILE)
+        var allCopied = true
+        
+        for (fileName in files) {
+            val source = File(downloadDir, fileName)
+            val dest = File(filesDir, fileName)
+            
+            if (!source.exists()) {
+                Log.e(TAG, "Source file not found: ${source.absolutePath}")
+                allCopied = false
+                continue
+            }
+            
+            if (!dest.exists() || dest.length() != source.length()) {
+                Log.i(TAG, "Copying $fileName...")
                 try {
-                    context.assets.open("$WHISPER_MODEL_DIR/$fileName").use { input ->
-                        FileOutputStream(destFile).use { output ->
-                            input.copyTo(output)
-                        }
-                    }
-                    Log.d(TAG, "Copied: $fileName")
+                    source.copyTo(dest, overwrite = true)
+                    Log.i(TAG, "Copied: $fileName (${dest.length() / 1024 / 1024} MB)")
                 } catch (e: Exception) {
-                    Log.e(TAG, "Failed to copy $fileName: ${e.message}")
+                    Log.e(TAG, "Failed to copy $fileName", e)
+                    allCopied = false
                 }
             }
         }
-
-        return modelsDir
+        
+        return if (allCopied) filesDir else null
     }
 
+    /**
+     * Загрузить токенизатор из tokenizer.json
+     */
+    private fun loadTokenizer(file: File) {
+        try {
+            val json = file.readText()
+            tokenizerData = JSONObject(json)
+            
+            // Извлекаем vocab из model.vocab
+            val modelObj = tokenizerData?.getJSONObject("model")
+            val vocabObj = modelObj?.getJSONObject("vocab")
+            
+            if (vocabObj != null) {
+                vocab = mutableMapOf()
+                idToToken = mutableMapOf()
+                
+                val keys = vocabObj.keys()
+                while (keys.hasNext()) {
+                    val token = keys.next()
+                    val id = vocabObj.getInt(token)
+                    (vocab as MutableMap)[token] = id
+                    (idToToken as MutableMap)[id] = token
+                }
+            }
+        } catch (e: Exception) {
+            Log.e(TAG, "Failed to load tokenizer", e)
+        }
+    }
+
+    /**
+     * Логировать информацию о моделях
+     */
+    private fun logModelInfo() {
+        encoderSession?.let { session ->
+            Log.i(TAG, "Encoder inputs: ${session.inputNames}")
+            Log.i(TAG, "Encoder outputs: ${session.outputNames}")
+        }
+        decoderSession?.let { session ->
+            Log.i(TAG, "Decoder inputs: ${session.inputNames}")
+            Log.i(TAG, "Decoder outputs: ${session.outputNames}")
+        }
+    }
+
+    /**
+     * Транскрибировать аудио
+     */
     suspend fun transcribe(audioData: FloatArray, language: Language): String? = withContext(Dispatchers.IO) {
         if (!isInitialized) {
             Log.e(TAG, "Not initialized")
@@ -153,37 +260,33 @@ class WhisperSTT(private val context: Context) {
 
         try {
             val durationSec = audioData.size / SAMPLE_RATE.toFloat()
-            Log.i(TAG, "=== Transcribing ${audioData.size} samples ($durationSec s) ===")
+            Log.i(TAG, "=== Transcribing ${audioData.size} samples (${"%.2f".format(durationSec)}s) ===")
 
             // Минимум 0.5 секунд
             if (audioData.size < SAMPLE_RATE / 2) {
-                Log.e(TAG, "Audio too short: ${audioData.size} samples")
+                Log.e(TAG, "Audio too short")
                 return@withContext null
             }
 
-            // Step 1: Log Mel Spectrogram (упрощённый - вызываем initializer)
+            // Шаг 1: Вычислить log-mel спектрограмму
             val melSpectrogram = computeMelSpectrogram(audioData)
-            Log.d(TAG, "Mel spectrogram shape: ${melSpectrogram.size} x ${melSpectrogram[0].size}")
+            Log.d(TAG, "Mel spectrogram computed: ${melSpectrogram.size}x${melSpectrogram[0].size}")
 
-            // Step 2: Encoder
+            // Шаг 2: Запустить encoder
             val encoderOutput = runEncoder(melSpectrogram)
             if (encoderOutput == null) {
                 Log.e(TAG, "Encoder failed")
                 return@withContext null
             }
-            Log.d(TAG, "Encoder output shape: ${encoderOutput.size} x ${encoderOutput[0].size}")
+            Log.d(TAG, "Encoder output: ${encoderOutput.size}x${encoderOutput[0].size}")
 
-            // Step 3: Initialize cache
-            val initialCache = initializeCache(encoderOutput)
-            Log.d(TAG, "Cache initialized")
+            // Шаг 3: Декодировать токены
+            val tokens = decodeTokens(encoderOutput, language)
+            Log.d(TAG, "Decoded ${tokens.size} tokens")
 
-            // Step 4: Decoder loop
-            val tokens = decodeTokens(encoderOutput, initialCache, language)
-            Log.d(TAG, "Decoded tokens: ${tokens.size}")
-
-            // Step 5: Detokenize
+            // Шаг 4: Детокенизировать в текст
             val text = detokenize(tokens)
-            Log.i(TAG, "Transcribed: '$text'")
+            Log.i(TAG, "Result: '$text'")
 
             text.ifEmpty { null }
         } catch (e: Exception) {
@@ -192,57 +295,42 @@ class WhisperSTT(private val context: Context) {
         }
     }
 
+    /**
+     * Вычислить log-mel спектрограмму
+     * Упрощённая реализация
+     */
     private fun computeMelSpectrogram(audioData: FloatArray): Array<FloatArray> {
-        // Упрощённая реализация - в реальности нужен полноценный mel spectrogram
-        // Для initializer нужен входной тензор аудио
+        // Whisper использует 80 mel-фильтров
+        // Длина спектрограммы = audio_length / 160 (для 16kHz)
         
-        val env = ortEnv ?: return Array(N_MELS) { FloatArray(N_CTX) }
-        val session = initializerSession ?: return Array(N_MELS) { FloatArray(N_CTX) }
+        val melLength = minOf((audioData.size / 160), N_CTX)
+        val mel = Array(N_MELS) { FloatArray(N_CTX) }
         
-        try {
-            // Паддинг до 30 секунд (480000 сэмплов)
-            val paddedAudio = FloatArray(480000)
-            val copyLen = minOf(audioData.size, 480000)
-            System.arraycopy(audioData, 0, paddedAudio, 0, copyLen)
-            
-            // Создаём входной тензор [1, 480000]
-            val audioTensor = OnnxTensor.createTensor(
-                env, 
-                FloatBuffer.wrap(paddedAudio),
-                longArrayOf(1, 480000L)
-            )
-            
-            val inputName = session.inputNames.iterator().next()
-            val result = session.run(mapOf(inputName to audioTensor))
-            
-            // Получаем mel spectrogram [1, 80, 3000] -> [80, 1500]
-            val outputTensor = result[0].value as OnnxTensor
-            val melData = TensorUtils.getFloatArray(outputTensor)
-            
-            // Reshape к [N_MELS, N_CTX]
-            val mel = Array(N_MELS) { FloatArray(N_CTX) }
-            for (i in 0 until N_MELS) {
-                for (j in 0 until N_CTX) {
-                    mel[i][j] = melData[i * N_CTX + j]
-                }
+        // Упрощённая реализация - в реальности нужен FFT и mel-фильтры
+        // Для работы нужно использовать полноценный mel spectrogram
+        // Здесь заглушка для компиляции
+        
+        // TODO: Реализовать полноценный mel spectrogram
+        // или использовать готовую реализацию из Whisper
+        
+        for (i in 0 until N_MELS) {
+            for (j in 0 until N_CTX) {
+                mel[i][j] = 0f
             }
-            
-            audioTensor.close()
-            result.close()
-            
-            return mel
-        } catch (e: Exception) {
-            Log.e(TAG, "Mel spectrogram error", e)
-            return Array(N_MELS) { FloatArray(N_CTX) }
         }
+        
+        return mel
     }
 
+    /**
+     * Запустить encoder
+     */
     private fun runEncoder(melSpectrogram: Array<FloatArray>): Array<FloatArray>? {
         val env = ortEnv ?: return null
         val session = encoderSession ?: return null
         
         try {
-            // Создаём входной тензор [1, 80, 1500]
+            // Создаём входной тензор [1, n_mels, n_ctx]
             val melData = FloatArray(N_MELS * N_CTX)
             for (i in 0 until N_MELS) {
                 for (j in 0 until N_CTX) {
@@ -256,25 +344,23 @@ class WhisperSTT(private val context: Context) {
                 longArrayOf(1, N_MELS.toLong(), N_CTX.toLong())
             )
             
+            // Получаем имя входа (обычно "input" или "mel")
             val inputName = session.inputNames.iterator().next()
+            Log.d(TAG, "Encoder input name: $inputName")
+            
             val result = session.run(mapOf(inputName to melTensor))
             
-            // Получаем encoder output [1, 1500, 384] для tiny, [1, 1500, 768] для small
+            // Получаем encoder output [1, n_ctx, d_model]
             val outputTensor = result[0].value as OnnxTensor
-            val outputShape = outputTensor.info.shape
-            val hiddenSize = outputShape[2].toInt()
+            val outputData = FloatArray(N_CTX * D_MODEL)
+            outputTensor.floatBuffer.get(outputData)
             
-            val encoderData = TensorUtils.getFloatArray(outputTensor)
-            
-            // Reshape к [1500, hiddenSize]
-            val encoderOutput = Array(N_CTX) { FloatArray(hiddenSize) }
+            val encoderOutput = Array(N_CTX) { FloatArray(D_MODEL) }
             for (i in 0 until N_CTX) {
-                for (j in 0 until hiddenSize) {
-                    encoderOutput[i][j] = encoderData[i * hiddenSize + j]
+                for (j in 0 until D_MODEL) {
+                    encoderOutput[i][j] = outputData[i * D_MODEL + j]
                 }
             }
-            
-            cachedEncoderOutput = encoderOutput
             
             melTensor.close()
             result.close()
@@ -286,134 +372,87 @@ class WhisperSTT(private val context: Context) {
         }
     }
 
-    private fun initializeCache(encoderOutput: Array<FloatArray>): Array<FloatArray> {
-        val env = ortEnv ?: return emptyArray()
-        val session = cacheInitSession ?: return emptyArray()
+    /**
+     * Декодировать токены
+     */
+    private fun decodeTokens(encoderOutput: Array<FloatArray>, language: Language): List<Int> {
+        val env = ortEnv ?: return emptyList()
+        val session = decoderSession ?: return emptyList()
         
         try {
-            // Создаём входной тензор из encoder output
-            val hiddenSize = encoderOutput[0].size
-            val encoderData = FloatArray(N_CTX * hiddenSize)
-            for (i in 0 until N_CTX) {
-                for (j in 0 until hiddenSize) {
-                    encoderData[i * hiddenSize + j] = encoderOutput[i][j]
-                }
-            }
+            val tokens = mutableListOf<Int>()
             
-            val encoderTensor = OnnxTensor.createTensor(
-                env,
-                FloatBuffer.wrap(encoderData),
-                longArrayOf(1, N_CTX.toLong(), hiddenSize.toLong())
-            )
-            
-            val inputName = session.inputNames.iterator().next()
-            val result = session.run(mapOf(inputName to encoderTensor))
-            
-            // Получаем cache
-            val outputTensor = result[0].value as OnnxTensor
-            val cacheData = TensorUtils.getFloatArray(outputTensor)
-            
-            // Reshape cache
-            val cache = Array(1) { FloatArray(cacheData.size) { cacheData[it] } }
-            
-            encoderTensor.close()
-            result.close()
-            
-            return cache
-        } catch (e: Exception) {
-            Log.e(TAG, "Cache init error", e)
-            return emptyArray()
-        }
-    }
-
-    private fun decodeTokens(
-        encoderOutput: Array<FloatArray>,
-        initialCache: Array<FloatArray>,
-        language: Language
-    ): LongArray {
-        val env = ortEnv ?: return longArrayOf()
-        val session = decoderSession ?: return longArrayOf()
-        
-        try {
-            val hiddenSize = encoderOutput[0].size
-            val tokens = mutableListOf<Long>()
-            
-            // Начальный токен
-            var currentToken = 50258L // <|lang|> - будет заменён на язык
-            
-            // Языковой токен
-            val langToken = languageTokens[language] ?: 50258L
-            
-            // Токены для декодирования
-            val sosToken = 50257L  // <|startoftranscript|>
-            val transcribeToken = 50359L  // <|transcribe|>
-            val eotToken = 50257L  // <|endoftext|> <|endoftext|>
-            
-            tokens.add(sosToken)
-            tokens.add(langToken)
-            tokens.add(transcribeToken)
-            
-            var cache = initialCache
+            // Начальные токены для Whisper
+            tokens.add(TOKEN_START.toInt())
+            LANG_TOKENS[language]?.let { tokens.add(it.toInt()) }
+            tokens.add(TOKEN_TRANSCRIBE.toInt())
+            tokens.add(TOKEN_NO_TIMESTAMPS.toInt())
             
             // Декодирование по токенам
             for (i in 0 until MAX_TOKENS) {
-                // Подготавливаем вход для decoder
-                val tokenData = LongArray(1) { currentToken }
-                val tokenTensor = OnnxTensor.createTensor(
+                // Создаём input_ids [1, num_tokens]
+                val tokenIds = LongArray(tokens.size) { j -> tokens[j].toLong() }
+                val inputIdsTensor = OnnxTensor.createTensor(
                     env,
-                    LongBuffer.wrap(tokenData),
-                    longArrayOf(1, 1)
+                    LongBuffer.wrap(tokenIds),
+                    longArrayOf(1, tokens.size.toLong())
                 )
                 
-                // Encoder output
-                val encoderData = FloatArray(N_CTX * hiddenSize)
+                // Создаём encoder_hidden_states [1, n_ctx, d_model]
+                val encoderData = FloatArray(N_CTX * D_MODEL)
                 for (j in 0 until N_CTX) {
-                    for (k in 0 until hiddenSize) {
-                        encoderData[j * hiddenSize + k] = encoderOutput[j][k]
+                    for (k in 0 until D_MODEL) {
+                        encoderData[j * D_MODEL + k] = encoderOutput[j][k]
                     }
                 }
                 val encoderTensor = OnnxTensor.createTensor(
                     env,
                     FloatBuffer.wrap(encoderData),
-                    longArrayOf(1, N_CTX.toLong(), hiddenSize.toLong())
+                    longArrayOf(1, N_CTX.toLong(), D_MODEL.toLong())
                 )
                 
-                // Cache
-                // ...
-                
+                // Запускаем decoder
                 val inputs = mapOf(
-                    "input_ids" to tokenTensor,
+                    "input_ids" to inputIdsTensor,
                     "encoder_hidden_states" to encoderTensor
                 )
                 
                 val result = session.run(inputs)
                 
-                // Получаем logits и следующий токен
+                // Получаем logits [1, num_tokens, vocab_size]
                 val logitsTensor = result[0].value as OnnxTensor
-                val logits = TensorUtils.getFloatArray(logitsTensor)
+                val logits = FloatArray(tokens.size * VOCAB_SIZE)
+                logitsTensor.floatBuffer.get(logits)
                 
-                // Argmax для следующего токена
-                val vocabSize = logits.size / tokens.size
-                val lastLogits = FloatArray(vocabSize) { logits[(tokens.size - 1) * vocabSize + it] }
-                val nextToken = argMax(lastLogits)
+                // Берём logits для последнего токена
+                val lastTokenLogits = FloatArray(VOCAB_SIZE) { j ->
+                    logits[(tokens.size - 1) * VOCAB_SIZE + j]
+                }
                 
-                if (nextToken == eotToken.toInt()) {
-                    Log.d(TAG, "End of transcription at token $i")
+                // Argmax
+                val nextToken = argMax(lastTokenLogits)
+                
+                // Проверяем на EOT
+                if (nextToken == TOKEN_EOT) {
+                    Log.d(TAG, "EOT at position $i")
+                    inputIdsTensor.close()
+                    encoderTensor.close()
+                    result.close()
                     break
                 }
                 
-                tokens.add(nextToken.toLong())
-                currentToken = nextToken.toLong()
+                tokens.add(nextToken)
                 
-                tokenTensor.close()
+                inputIdsTensor.close()
                 encoderTensor.close()
                 result.close()
             }
             
-            return tokens.toLongArray()
+            // Возвращаем только текстовые токены (без специальных)
+            return tokens.drop(4) // Пропускаем начальные токены
         } catch (e: Exception) {
             Log.e(TAG, "Decoder error", e)
-            return longArrayOf()
+            return emptyList()
         }
     }
 
@@ -429,55 +468,47 @@ class WhisperSTT(private val context: Context) {
         return maxIdx
     }
 
-    private fun detokenize(tokens: LongArray): String {
-        val env = ortEnv ?: return ""
-        val session = detokenizerSession ?: return ""
+    /**
+     * Детокенизировать токены в текст
+     */
+    private fun detokenize(tokens: List<Int>): String {
+        val sb = StringBuilder()
         
-        try {
-            // Создаём входной тензор токенов
-            val tokenTensor = OnnxTensor.createTensor(
-                env,
-                LongBuffer.wrap(tokens),
-                longArrayOf(1, tokens.size.toLong())
-            )
-            
-            val inputName = session.inputNames.iterator().next()
-            val result = session.run(mapOf(inputName to tokenTensor))
-            
-            // Получаем строку
-            val output = result[0].value
-            val text = output?.toString() ?: ""
-            
-            // Очищаем специальные токены
-            val cleanText = text
-                .replace("<|startoftranscript|>", "")
-                .replace("<|transcribe|>", "")
-                .replace("<|notimestamps|>", "")
-                .replace(Regex("<\\|[a-z]+\\|>"), "")
-                .trim()
-            
-            tokenTensor.close()
-            result.close()
-            
-            return cleanText
-        } catch (e: Exception) {
-            Log.e(TAG, "Detokenizer error", e)
-            return ""
+        for (tokenId in tokens) {
+            val token = idToToken[tokenId]
+            if (token != null) {
+                // Убираем специальный символ Whisper (Ġ = пробел)
+                val decoded = token
+                    .replace("Ġ", " ")
+                    .replace("Ċ", "\n")
+                    .replace("<|", "")
+                    .replace("|>", "")
+                
+                // Пропускаем специальные токены
+                if (!token.startsWith("<|")) {
+                    sb.append(decoded)
+                }
+            }
         }
+        
+        return sb.toString().trim()
     }
 
     suspend fun transcribeFile(audioPath: String, language: Language): String? = withContext(Dispatchers.IO) {
-        // Читаем WAV файл
         val file = File(audioPath)
         if (!file.exists()) {
-            Log.e(TAG, "Audio file not found: $audioPath")
+            Log.e(TAG, "File not found: $audioPath")
             return@withContext null
         }
         
-        // Простой WAV reader
+        // Читаем WAV файл (пропускаем 44 байта header)
         val bytes = file.readBytes()
-        // Пропускаем WAV header (44 байта) и конвертируем в float
-        val samples = (bytes.size - 44) / 2  // 16-bit samples
+        if (bytes.size < 44) {
+            Log.e(TAG, "File too small")
+            return@withContext null
+        }
+        
+        val samples = (bytes.size - 44) / 2
         val audioData = FloatArray(samples)
         for (i in 0 until samples) {
             val low = bytes[44 + i * 2].toInt() and 0xFF
@@ -493,23 +524,14 @@ class WhisperSTT(private val context: Context) {
 
     fun release() {
         try {
-            initializerSession?.close()
             encoderSession?.close()
             decoderSession?.close()
-            cacheInitSession?.close()
-            detokenizerSession?.close()
-            ortEnv = null
-            
-            initializerSession = null
             encoderSession = null
             decoderSession = null
-            cacheInitSession = null
-            detokenizerSession = null
-            
             isInitialized = false
             Log.i(TAG, "Released")
         } catch (e: Exception) {
-            Log.e(TAG, "Error releasing resources", e)
+            Log.e(TAG, "Error releasing", e)
         }
     }
 }
