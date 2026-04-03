@@ -7,8 +7,6 @@ import android.os.Build
 import android.os.StrictMode
 import android.util.Log
 import androidx.appcompat.app.AppCompatDelegate
-import com.k2fsa.sherpa.onnx.OfflineRecognizer
-import com.k2fsa.sherpa.onnx.OfflineTts
 import com.ruch.translator.data.PreferencesManager
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.SupervisorJob
