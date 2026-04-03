@@ -174,7 +174,10 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
      * Start voice recording and recognition
      */
     fun startRecording(language: Language) {
-        if (_processingState.value != ProcessingState.IDLE) return
+        if (_processingState.value != ProcessingState.IDLE) {
+            Log.w(TAG, "Cannot start recording, current state: ${_processingState.value}")
+            return
+        }
 
         _recordingLanguage.value = language
         
@@ -188,9 +191,9 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
                 }
 
                 // Record audio using AudioRecorder
-                Log.d(TAG, "Starting audio recording...")
+                Log.i(TAG, "=== Starting audio recording ===")
                 val audioData = audioRecorder.recordAudio(maxDurationSeconds = 15)
-                Log.d(TAG, "Audio recording finished, samples: ${audioData?.size ?: 0}")
+                Log.i(TAG, "=== Audio recording finished, samples: ${audioData?.size ?: 0} ===")
 
                 _isRecordingRussian.value = false
                 _isRecordingChinese.value = false
@@ -202,9 +205,9 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
                     _processingState.value = ProcessingState.TRANSCRIBING
 
                     // Transcribe with Whisper
-                    Log.d(TAG, "Starting transcription...")
+                    Log.i(TAG, "=== Starting transcription (${audioData.size} samples, ${audioData.size/16000.0f}s) ===")
                     val text = whisperSTT.transcribe(audioData, language)
-                    Log.d(TAG, "Transcription result: $text")
+                    Log.i(TAG, "=== Transcription result: $text ===")
 
                     if (!text.isNullOrEmpty()) {
                         _processingState.value = ProcessingState.TRANSLATING
@@ -220,10 +223,26 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
                         }
                     }
                 } else {
-                    Log.w(TAG, "Audio too short or null, skipping transcription")
+                    Log.w(TAG, "Audio too short or null (${audioData?.size ?: 0} samples), skipping transcription")
                 }
 
                 _processingState.value = ProcessingState.IDLE
+                Log.i(TAG, "=== Recording session complete ===")
+                
+            } catch (e: OutOfMemoryError) {
+                Log.e(TAG, "OutOfMemoryError in recording: ${e.message}", e)
+                _errorMessage.value = "Недостаточно памяти"
+                _processingState.value = ProcessingState.IDLE
+                _isRecordingRussian.value = false
+                _isRecordingChinese.value = false
+                _recordingLanguage.value = null
+            } catch (e: UnsatisfiedLinkError) {
+                Log.e(TAG, "Native library error: ${e.message}", e)
+                _errorMessage.value = "Ошибка нативной библиотеки"
+                _processingState.value = ProcessingState.IDLE
+                _isRecordingRussian.value = false
+                _isRecordingChinese.value = false
+                _recordingLanguage.value = null
             } catch (e: Exception) {
                 Log.e(TAG, "Recording error: ${e.message}", e)
                 _errorMessage.value = getApplication<Application>().getString(R.string.error_recognition)
@@ -236,7 +255,7 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
     }
 
     fun stopRecording() {
-        Log.d(TAG, "stopRecording called")
+        Log.i(TAG, "=== stopRecording called ===")
         audioRecorder.stopRecording()
         // Don't cancel the job - let it finish naturally with partial audio
     }
