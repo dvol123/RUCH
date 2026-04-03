@@ -47,6 +47,9 @@ class SherpaTTSEngine(private val context: Context) {
         } catch (e: Exception) {
             Log.e(TAG, "Init error: ${e.message}", e)
             false
+        } catch (e: UnsatisfiedLinkError) {
+            Log.e(TAG, "Native library error: ${e.message}", e)
+            false
         }
     }
 
@@ -54,6 +57,7 @@ class SherpaTTSEngine(private val context: Context) {
         return try {
             Log.d(TAG, "Initializing Russian TTS from $RUSSIAN_TTS_DIR")
             
+            // Check assets
             val assetFiles = context.assets.list(RUSSIAN_TTS_DIR) ?: emptyArray()
             Log.d(TAG, "Assets in $RUSSIAN_TTS_DIR: ${assetFiles.toList()}")
             
@@ -62,14 +66,14 @@ class SherpaTTSEngine(private val context: Context) {
                 return false
             }
             
+            // Copy models to filesDir
             val modelDir = copyTTSModels(RUSSIAN_TTS_DIR, "ru")
             
-            // Find model.onnx (Russian uses model.onnx)
             val modelFile = File(modelDir, "model.onnx")
             val tokensFile = File(modelDir, TOKENS_TXT)
             
-            Log.d(TAG, "Model: ${modelFile.absolutePath}, exists=${modelFile.exists()}")
-            Log.d(TAG, "Tokens: ${tokensFile.absolutePath}, exists=${tokensFile.exists()}")
+            Log.d(TAG, "Model: ${modelFile.absolutePath}, exists=${modelFile.exists()}, size=${modelFile.length()}")
+            Log.d(TAG, "Tokens: ${tokensFile.absolutePath}, exists=${tokensFile.exists()}, size=${tokensFile.length()}")
             
             if (!modelFile.exists() || !tokensFile.exists()) {
                 Log.e(TAG, "Missing Russian TTS files")
@@ -86,14 +90,14 @@ class SherpaTTSEngine(private val context: Context) {
                         lengthScale = 1.0f
                     ),
                     numThreads = 2,
-                    debug = true,
+                    debug = false,
                     provider = "cpu"
                 ),
                 maxNumSentences = 1
             )
 
             Log.d(TAG, "Creating Russian OfflineTts...")
-            russianTts = OfflineTts(context.assets, config)
+            russianTts = OfflineTts(config)
             Log.i(TAG, "Russian TTS initialized successfully")
             true
         } catch (e: Exception) {
@@ -106,6 +110,7 @@ class SherpaTTSEngine(private val context: Context) {
         return try {
             Log.d(TAG, "Initializing Chinese TTS from $CHINESE_TTS_DIR")
             
+            // Check assets
             val assetFiles = context.assets.list(CHINESE_TTS_DIR) ?: emptyArray()
             Log.d(TAG, "Assets in $CHINESE_TTS_DIR: ${assetFiles.toList()}")
             
@@ -114,15 +119,15 @@ class SherpaTTSEngine(private val context: Context) {
                 return false
             }
             
+            // Copy models to filesDir
             val modelDir = copyTTSModels(CHINESE_TTS_DIR, "zh")
             
-            // Chinese TTS uses vits-aishell3.int8.onnx
             val modelFile = File(modelDir, "vits-aishell3.int8.onnx")
             val tokensFile = File(modelDir, TOKENS_TXT)
             val lexiconFile = File(modelDir, LEXICON_TXT)
             val ruleFarFile = File(modelDir, RULE_FAR)
             
-            Log.d(TAG, "Model: ${modelFile.absolutePath}, exists=${modelFile.exists()}")
+            Log.d(TAG, "Model: ${modelFile.absolutePath}, exists=${modelFile.exists()}, size=${modelFile.length()}")
             Log.d(TAG, "Tokens: ${tokensFile.absolutePath}, exists=${tokensFile.exists()}")
             Log.d(TAG, "Lexicon: ${lexiconFile.absolutePath}, exists=${lexiconFile.exists()}")
             Log.d(TAG, "Rule.far: ${ruleFarFile.absolutePath}, exists=${ruleFarFile.exists()}")
@@ -156,7 +161,7 @@ class SherpaTTSEngine(private val context: Context) {
                 model = OfflineTtsModelConfig(
                     vits = vitsConfig,
                     numThreads = 2,
-                    debug = true,
+                    debug = false,
                     provider = "cpu"
                 ),
                 ruleFars = if (ruleFarFile.exists()) ruleFarFile.absolutePath else "",
@@ -164,7 +169,7 @@ class SherpaTTSEngine(private val context: Context) {
             )
 
             Log.d(TAG, "Creating Chinese OfflineTts...")
-            chineseTts = OfflineTts(context.assets, config)
+            chineseTts = OfflineTts(config)
             Log.i(TAG, "Chinese TTS initialized successfully")
             true
         } catch (e: Exception) {
@@ -180,7 +185,6 @@ class SherpaTTSEngine(private val context: Context) {
         }
 
         try {
-            // Copy all files from asset directory
             val assetFiles = context.assets.list(assetDir) ?: emptyArray()
             for (fileName in assetFiles) {
                 val destFile = File(destDir, fileName)
@@ -190,11 +194,11 @@ class SherpaTTSEngine(private val context: Context) {
                             input.copyTo(output)
                         }
                     }
-                    Log.d(TAG, "Copied: $fileName")
+                    Log.d(TAG, "Copied: $fileName (${destFile.length()} bytes)")
                 }
             }
         } catch (e: Exception) {
-            Log.w(TAG, "Copy error: ${e.message}")
+            Log.e(TAG, "Copy error: ${e.message}")
         }
 
         return destDir
@@ -246,7 +250,7 @@ class SherpaTTSEngine(private val context: Context) {
             Language.RUSSIAN -> russianTts
             Language.CHINESE -> chineseTts
         }
-        return tts?.sampleRate() ?: 22050
+        return tts?.sampleRate ?: 22050
     }
 
     fun isReady(language: Language): Boolean {

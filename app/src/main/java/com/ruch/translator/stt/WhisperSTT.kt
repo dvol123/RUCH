@@ -1,7 +1,6 @@
 package com.ruch.translator.stt
 
 import android.content.Context
-import android.content.res.AssetManager
 import android.util.Log
 import com.k2fsa.sherpa.onnx.*
 import com.ruch.translator.data.Language
@@ -33,6 +32,16 @@ class WhisperSTT(private val context: Context) {
         try {
             Log.i(TAG, "Initializing Whisper STT...")
 
+            // Check if models exist in assets
+            val assetFiles = context.assets.list(WHISPER_MODEL_DIR) ?: emptyArray()
+            Log.d(TAG, "Assets in $WHISPER_MODEL_DIR: ${assetFiles.toList()}")
+            
+            if (assetFiles.isEmpty()) {
+                Log.e(TAG, "No Whisper models found in assets")
+                return@withContext false
+            }
+
+            // Copy models from assets to filesDir (required for sherpa-onnx)
             val modelsDir = copyModelsFromAssets()
             
             val encoderFile = File(modelsDir, ENCODER_FILE)
@@ -40,19 +49,29 @@ class WhisperSTT(private val context: Context) {
             val tokensFile = File(modelsDir, TOKENS_FILE)
             
             if (!encoderFile.exists() || !decoderFile.exists() || !tokensFile.exists()) {
-                Log.w(TAG, "Whisper models not found")
+                Log.e(TAG, "Whisper models not found after copy")
                 isInitialized = false
                 return@withContext false
             }
 
+            Log.d(TAG, "Encoder: ${encoderFile.absolutePath}, size=${encoderFile.length()}")
+            Log.d(TAG, "Decoder: ${decoderFile.absolutePath}, size=${decoderFile.length()}")
+            Log.d(TAG, "Tokens: ${tokensFile.absolutePath}, size=${tokensFile.length()}")
+
+            // Create config with absolute paths to files on filesystem
             val config = createConfig(modelsDir.absolutePath)
-            recognizer = OfflineRecognizer(context.assets, config)
+            
+            Log.d(TAG, "Creating OfflineRecognizer...")
+            recognizer = OfflineRecognizer(config)
             
             isInitialized = recognizer != null
             Log.i(TAG, "Whisper STT initialized: $isInitialized")
             isInitialized
         } catch (e: Exception) {
             Log.e(TAG, "Failed to initialize Whisper STT: ${e.message}", e)
+            false
+        } catch (e: UnsatisfiedLinkError) {
+            Log.e(TAG, "Native library error: ${e.message}", e)
             false
         }
     }
@@ -91,10 +110,12 @@ class WhisperSTT(private val context: Context) {
                             input.copyTo(output)
                         }
                     }
-                    Log.d(TAG, "Copied: $fileName")
+                    Log.d(TAG, "Copied: $fileName (${destFile.length()} bytes)")
                 } catch (e: Exception) {
-                    Log.w(TAG, "File not found: $fileName")
+                    Log.e(TAG, "Failed to copy $fileName: ${e.message}")
                 }
+            } else {
+                Log.d(TAG, "Already exists: $fileName")
             }
         }
 

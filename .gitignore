@@ -100,7 +100,7 @@ Thumbs.db
 app/src/main/assets/models/
 
 # Native libraries (downloaded separately)
-app/src/main/jniLibs/
+# app/src/main/jniLibs/ - needed for native libraries
 
 # Temporary files
 *.tmp
