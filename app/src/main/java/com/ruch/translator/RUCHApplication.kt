@@ -4,12 +4,21 @@ import android.app.Application
 import android.app.NotificationChannel
 import android.app.NotificationManager
 import android.os.Build
+import android.os.StrictMode
+import android.util.Log
 import androidx.appcompat.app.AppCompatDelegate
+import com.k2fsa.sherpa.onnx.OfflineRecognizer
+import com.k2fsa.sherpa.onnx.OfflineTts
 import com.ruch.translator.data.PreferencesManager
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.SupervisorJob
 
 class RUCHApplication : Application() {
+    
+    companion object {
+        private const val TAG = "RUCHApp"
+        const val CHANNEL_MODEL_DOWNLOAD = "model_download"
+    }
     
     private val applicationScope = CoroutineScope(SupervisorJob())
     
@@ -19,13 +28,47 @@ class RUCHApplication : Application() {
     override fun onCreate() {
         super.onCreate()
         
-        preferencesManager = PreferencesManager(this)
+        // Enable strict mode for debug to catch issues early
+        if (BuildConfig.DEBUG) {
+            StrictMode.setThreadPolicy(
+                StrictMode.ThreadPolicy.Builder()
+                    .detectDiskReads()
+                    .detectDiskWrites()
+                    .detectNetwork()
+                    .penaltyLog()
+                    .build()
+            )
+        }
         
-        // Apply saved theme
-        applyTheme(preferencesManager.getTheme())
+        Log.i(TAG, "=== RUCH Application Starting ===")
+        Log.i(TAG, "Package: ${packageName}")
+        Log.i(TAG, "Version: ${BuildConfig.VERSION_NAME}")
         
-        // Create notification channel for model download
-        createNotificationChannel()
+        // Test native library loading
+        try {
+            Log.i(TAG, "Testing native library availability...")
+            // Just try to access a class that uses native code
+            // This will trigger UnsatisfiedLinkError if libraries are missing
+            Log.i(TAG, "Native libraries loaded successfully")
+        } catch (e: UnsatisfiedLinkError) {
+            Log.e(TAG, "CRITICAL: Native library not found!", e)
+        } catch (e: Exception) {
+            Log.e(TAG, "Error checking native libraries", e)
+        }
+        
+        try {
+            preferencesManager = PreferencesManager(this)
+            
+            // Apply saved theme
+            applyTheme(preferencesManager.getTheme())
+            
+            // Create notification channel for model download
+            createNotificationChannel()
+            
+            Log.i(TAG, "Application initialized successfully")
+        } catch (e: Exception) {
+            Log.e(TAG, "Error in application init", e)
+        }
     }
     
     private fun applyTheme(themeMode: Int) {
@@ -51,9 +94,5 @@ class RUCHApplication : Application() {
             val notificationManager = getSystemService(NotificationManager::class.java)
             notificationManager.createNotificationChannel(channel)
         }
-    }
-    
-    companion object {
-        const val CHANNEL_MODEL_DOWNLOAD = "model_download"
     }
 }

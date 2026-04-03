@@ -106,17 +106,38 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
             try {
                 _engineStatus.value = getApplication<Application>().getString(R.string.model_downloading)
                 
+                Log.i(TAG, "=== Starting engine initialization ===")
+                
                 // Initialize Whisper STT
-                val sttReady = whisperSTT.initialize()
-                Log.i(TAG, "Whisper STT initialized: $sttReady")
+                var sttReady = false
+                try {
+                    sttReady = whisperSTT.initialize()
+                    Log.i(TAG, "Whisper STT initialized: $sttReady")
+                } catch (e: UnsatisfiedLinkError) {
+                    Log.e(TAG, "Native library error for STT: ${e.message}")
+                } catch (e: Exception) {
+                    Log.e(TAG, "STT init error: ${e.message}")
+                }
 
                 // Initialize Translator
-                val translatorReady = translator.initialize()
-                Log.i(TAG, "NLLB Translator initialized: $translatorReady") //noinspection SpellCheckingInspection
+                var translatorReady = false
+                try {
+                    translatorReady = translator.initialize()
+                    Log.i(TAG, "NLLB Translator initialized: $translatorReady")
+                } catch (e: Exception) {
+                    Log.e(TAG, "Translator init error: ${e.message}")
+                }
 
                 // Initialize TTS
-                val ttsReady = ttsEngine.initialize()
-                Log.i(TAG, "Sherpa TTS initialized: $ttsReady")
+                var ttsReady = false
+                try {
+                    ttsReady = ttsEngine.initialize()
+                    Log.i(TAG, "Sherpa TTS initialized: $ttsReady")
+                } catch (e: UnsatisfiedLinkError) {
+                    Log.e(TAG, "Native library error for TTS: ${e.message}")
+                } catch (e: Exception) {
+                    Log.e(TAG, "TTS init error: ${e.message}")
+                }
 
                 val allReady = sttReady || translatorReady || ttsReady
                 _modelsReady.value = allReady
@@ -129,11 +150,15 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
                 }
                 _engineStatus.value = status
                 
-                Log.i(TAG, "All engines initialized. Ready: $allReady")
+                Log.i(TAG, "=== All engines initialized. Ready: $allReady ===")
             } catch (e: Exception) {
                 Log.e(TAG, "Engine initialization error: ${e.message}", e)
                 _isInitializing.value = false
                 _errorMessage.value = "Initialization error: ${e.message}"
+            } catch (e: UnsatisfiedLinkError) {
+                Log.e(TAG, "Native library error: ${e.message}", e)
+                _isInitializing.value = false
+                _errorMessage.value = "Native library error: ${e.message}"
             }
         }
     }
