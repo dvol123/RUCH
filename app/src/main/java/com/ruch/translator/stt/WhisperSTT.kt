@@ -6,12 +6,12 @@ import ai.onnxruntime.OrtSession
 import android.content.Context
 import android.os.Environment
 import android.util.Log
+import com.ruch.translator.audio.MelSpectrogram
 import com.ruch.translator.data.Language
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 import org.json.JSONObject
 import java.io.File
-import java.io.FileOutputStream
 import java.nio.FloatBuffer
 import java.nio.LongBuffer
 
@@ -62,6 +62,9 @@ class WhisperSTT(private val context: Context) {
     private var tokenizerData: JSONObject? = null
     private var vocab: Map<String, Int> = emptyMap()
     private var idToToken: Map<Int, String> = emptyMap()
+    
+    // Mel Spectrogram calculator
+    private var melSpectrogram: MelSpectrogram? = null
 
     /**
      * Инициализация STT
@@ -106,6 +109,15 @@ class WhisperSTT(private val context: Context) {
             // Шаг 3: Загружаем токенизатор
             loadTokenizer(tokenizerFile)
             Log.i(TAG, "Tokenizer loaded, vocab size: ${vocab.size}")
+            
+            // Шаг 3.5: Инициализируем Mel Spectrogram
+            melSpectrogram = MelSpectrogram(
+                sampleRate = SAMPLE_RATE,
+                nMels = N_MELS,
+                nFft = 400,
+                hopLength = 160
+            )
+            Log.i(TAG, "Mel Spectrogram initialized")
             
             // Шаг 4: Создаём ONNX Environment
             ortEnv = OrtEnvironment.getEnvironment()
@@ -296,30 +308,17 @@ class WhisperSTT(private val context: Context) {
     }
 
     /**
-     * Вычислить log-mel спектрограмму
-     * Упрощённая реализация
+     * Вычислить log-mel спектрограмму из аудио
      */
     private fun computeMelSpectrogram(audioData: FloatArray): Array<FloatArray> {
-        // Whisper использует 80 mel-фильтров
-        // Длина спектрограммы = audio_length / 160 (для 16kHz)
+        val mel = melSpectrogram ?: return Array(N_MELS) { FloatArray(N_CTX) }
         
-        val melLength = minOf((audioData.size / 160), N_CTX)
-        val mel = Array(N_MELS) { FloatArray(N_CTX) }
+        // Вычисляем mel-спектрограмму
+        // Whisper ожидает фиксированную длину 3000 фреймов (30 секунд)
+        val melSpec = mel.compute(audioData, N_CTX)
         
-        // Упрощённая реализация - в реальности нужен FFT и mel-фильтры
-        // Для работы нужно использовать полноценный mel spectrogram
-        // Здесь заглушка для компиляции
-        
-        // TODO: Реализовать полноценный mel spectrogram
-        // или использовать готовую реализацию из Whisper
-        
-        for (i in 0 until N_MELS) {
-            for (j in 0 until N_CTX) {
-                mel[i][j] = 0f
-            }
-        }
-        
-        return mel
+        // melSpec имеет размер [80 x N_CTX], что нам и нужно
+        return melSpec
     }
 
     /**
